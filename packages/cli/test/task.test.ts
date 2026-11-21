@@ -27,6 +27,7 @@ describe("deterministic task claiming", () => {
     if (!result.ok) throw new Error("Claim rejected");
     expect(result.context.task.id).toBe(higher.id);
     expect(result.context.prompt).toContain("Project agents");
+    expect(result.context.prompt).toContain("npm test");
     expect(result.context.prompt).toContain("Deliver useful software");
     expect(result.context.prompt).toContain("First task");
     expect(findRecord(fs, "/repo", higher.id).status).toBe("in-progress");

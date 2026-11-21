@@ -80,6 +80,8 @@ export function buildTaskContext(fs: FileSystem, root: string, task: RecordEntry
   }
 
   for (const path of projectFiles) include(path, projectDocs, true);
+  // Give the worker the exact configured verification gates, not just a vague instruction.
+  include(".agentctl/checks.yaml", projectDocs, true);
   // Task and parent requirements are mandatory. ADRs and supporting records are bounded.
   const fileOf = (record: RecordEntry) => relative(root, record.file).replaceAll("\\", "/");
   include(fileOf(task), taskDocs, true, task.id);
