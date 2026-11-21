@@ -26,7 +26,7 @@ Record creation allocates stable IDs, validates required relationships and adds 
 
 ## Development
 
-From the monorepo root:
+Requires Node.js 24 or newer. From the monorepo root:
 
 ```sh
 npm install
