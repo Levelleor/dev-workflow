@@ -13,11 +13,19 @@ describe("CLI interface", () => {
     expect(output.join("\n")).toContain("0.1.0");
   });
 
+  it("initialises an absolute target directory", () => {
+    const { fs } = fixture();
+    const output: string[] = [];
+    const result = runCli(["init", "/repo"], { fs, cwd: "/templates", templates: "/templates", output: (value) => output.push(value) });
+    expect(result).toBe(0);
+    expect(fs.existsSync("/repo/.agentctl/project.yaml")).toBe(true);
+  });
+
   it("supports JSON status for agent consumers", () => {
     const { fs, initialize } = fixture();
     initialize();
     const output: string[] = [];
-    const result = runCli(["status", "--json"], { fs, cwd: "/repo", output: (value) => output.push(value) });
+    const result = runCli(["--json", "status"], { fs, cwd: "/repo", output: (value) => output.push(value) });
     expect(result).toBe(0);
     expect(JSON.parse(output[0]).project.id).toBe("repo");
   });

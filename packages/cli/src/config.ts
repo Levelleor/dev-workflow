@@ -8,13 +8,13 @@ const names = ["project", "models", "checks"] as const;
 
 function parts(key: string): string[] {
   const segments = key.split(".");
+  if (segments.some((part) => ["__proto__", "prototype", "constructor"].includes(part))) {
+    throw new Error("Unsafe configuration key.");
+  }
   if (segments.length < 2 || segments.some((segment) => !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(segment))) {
     throw new Error("Use a dotted setting path, e.g. models.roles.worker.thinking.");
   }
   if (!names.includes(segments[0] as typeof names[number])) throw new Error("Unknown configuration file.");
-  if (segments.some((part) => ["__proto__", "prototype", "constructor"].includes(part))) {
-    throw new Error("Unsafe configuration key.");
-  }
   return segments;
 }
 

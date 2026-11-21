@@ -22,6 +22,13 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Typecheck, build, test and smoke test
         run: npm run check
+      - name: Exercise built CLI against a fresh repository
+        run: |
+          tmp="$(mktemp -d)"
+          node packages/cli/dist/index.js init "$tmp"
+          test -f "$tmp/.agentctl/project.yaml"
+          test -f "$tmp/.agentctl/models.yaml"
+          (cd "$tmp" && node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" doctor)
       - name: Check npm package contents
         run: |
           npm pack --workspace @levelleor/agentctl --dry-run --json > pack.json

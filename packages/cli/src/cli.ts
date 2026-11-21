@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FileSystem } from "./fs.js";
 import { disk } from "./fs.js";
@@ -83,7 +83,7 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     if (!command || command === "help" || flags.help === true) { output(help); return 0; }
 
     if (command === "init") {
-      emit(initProject(fs, action ? join(cwd, action) : cwd, templates));
+      emit(initProject(fs, action ? resolve(cwd, action) : cwd, templates));
       return 0;
     }
 
