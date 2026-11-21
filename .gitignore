@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+.agentctl/runtime/
+.agentctl/cache/
+.pi/sessions/
+.pi/logs/
+.worktrees/
+worktrees/
+*.sqlite
+*.sqlite-*
+.DS_Store

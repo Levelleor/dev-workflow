@@ -1,0 +1,18 @@
+# This is a proposed trust policy; no verification engine is wired up yet.
+schemaVersion: 1
+checks:
+  scaffold:
+    command: npm test
+    required: true
+    timeoutSeconds: 120
+
+profiles:
+  scaffold: [scaffold]
+  feature: []     # Must be defined and nonempty before feature acceptance.
+  release: []     # Must be defined and nonempty before publishing.
+
+policy:
+  missingRequiredCheck: block
+  unconfiguredProfile: block
+  workerMayChangePolicy: false
+  bindEvidenceToRevision: true

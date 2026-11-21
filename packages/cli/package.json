@@ -1,0 +1,10 @@
+{
+  "name": "@levelleor/dev-workflow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI for the dev-workflow coding-agent harness (not yet implemented)",
+  "engines": { "node": ">=22" },
+  "files": ["dist", "README.md"],
+  "publishConfig": { "access": "public" }
+}

@@ -1,0 +1,14 @@
+schemaVersion: 1
+project:
+  id: REPLACE_WITH_PROJECT_ID
+storage:
+  knowledge: repository
+  runtime: local
+knowledge:
+  entrypoint: AGENTS.md
+  roots: [docs]
+orchestration:
+  engine: ultracode
+  mode: sequential
+  maxConcurrentWriters: 1
+configurationStatus: proposed
