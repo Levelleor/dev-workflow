@@ -24,6 +24,7 @@ Usage:
   agentctl doctor                                   Inspect project setup
   agentctl status [--json]                          Show project and task counts
   agentctl task claim <ID|next> [--json]            Claim a specific or next eligible task, with context
+  Example: agentctl task claim next                  Select automatically by priority
   agentctl task getcontext [ID] [--json]            Resume an in-progress task
   agentctl task complete [ID] [--json]              Mark an in-progress task implemented
   agentctl work list|show ID|add --title T --parent PRD-ID
