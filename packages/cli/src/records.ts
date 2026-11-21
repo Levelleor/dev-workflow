@@ -50,7 +50,61 @@ export function listRecords(fs: FileSystem, root: string, type?: RecordType): Re
     const relative = directories[selected];
     const folder = join(root, relative);
     if (!fs.existsSync(folder)) continue;
-    for (const filename of fs.readdirSync(folder).filter((f) => f.endsWith(".md") && f !== "README.md").sort()) {
+    const prefix = prefixes[selected];
+    const recordFilename = new RegExp(`^${prefix}-\\d{4,}(?:-.+)?\\.mdimport { basename, join } from "node:path";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import type { FileSystem } from "./fs.js";
+import { slug } from "./project.js";
+
+export type RecordType = "story" | "prd" | "adr" | "note";
+export type RecordEntry = {
+  id: string;
+  type: RecordType;
+  title: string;
+  status: string;
+  file: string;
+  metadata: Record<string, unknown>;
+  body: string;
+};
+
+const directories: Record<RecordType, string> = {
+  story: "docs/work/items",
+  prd: "docs/product",
+  adr: "docs/decisions",
+  note: "docs/knowledge/inbox",
+};
+const prefixes: Record<RecordType, string> = {
+  story: "STORY", prd: "PRD", adr: "ADR", note: "NOTE",
+};
+
+function decode(raw: string, file: string): RecordEntry {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(raw);
+  if (!match) throw new Error(`Missing frontmatter: ${file}`);
+  const value: unknown = parseYaml(match[1]);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid frontmatter: ${file}`);
+  }
+  const metadata = value as Record<string, unknown>;
+  const type = String(metadata.type) as RecordType;
+  if (!(type in directories) || typeof metadata.id !== "string") {
+    throw new Error(`Unrecognised record type or missing ID: ${file}`);
+  }
+  const body = raw.slice(match[0].length);
+  const title = body.match(/^#\s+(.+)$/m)?.[1] ?? basename(file);
+  return {
+    id: metadata.id, type, title, status: String(metadata.status ?? "unknown"),
+    file, metadata, body,
+  };
+}
+
+export function listRecords(fs: FileSystem, root: string, type?: RecordType): RecordEntry[] {
+  const result: RecordEntry[] = [];
+  for (const selected of (type ? [type] : Object.keys(directories) as RecordType[])) {
+    const relative = directories[selected];
+    const folder = join(root, relative);
+    if (!fs.existsSync(folder)) continue;
+);
+    for (const filename of fs.readdirSync(folder).filter((f) => recordFilename.test(f)).sort()) {
       const file = join(folder, filename);
       const record = decode(fs.readFileSync(file, "utf8"), file);
       if (record.type !== selected) throw new Error(`Record type and directory disagree: ${file}`);
@@ -77,6 +131,7 @@ export type NewRecord = {
 export function addRecord(fs: FileSystem, root: string, input: NewRecord): RecordEntry {
   const title = input.title.trim();
   if (!title) throw new Error("Title must not be empty.");
+  if (/[\\r\\n\\x00-\\x1f]/.test(title)) throw new Error("Title must be a single line.");
   const all = listRecords(fs, root);
   if (input.type === "story") {
     if (!input.parent) throw new Error("Stories require --parent <PRD-ID>.");

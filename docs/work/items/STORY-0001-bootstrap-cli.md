@@ -1,7 +1,7 @@
 ---
 id: STORY-0001
 type: story
-status: proposed
+status: implemented
 parent: PRD-0001
 depends_on: []
 related:
@@ -28,4 +28,6 @@ Detect Git root and existing `AGENTS.md` / `.agentctl` files; propose missing fi
 
 ## Verification
 
-Tests and a runnable command are not yet implemented. This story is **proposed, not ready or accepted**.
+A runnable TypeScript CLI and Vitest/memfs tests are implemented, alongside a CI workflow that builds, tests and smoke-tests the package. See [PR #1](https://github.com/Levelleor/dev-workflow/pull/1).
+
+**Implementation status:** implemented and verified on the feature branch. Integration and release are tracked separately. Ultracode execution is explicitly outside this bootstrap story.

@@ -13,6 +13,9 @@ describe("versioned knowledge and work records", () => {
     expect([first.id, second.id]).toEqual(["STORY-0001", "STORY-0002"]);
     expect(listRecords(fs, "/repo", "story")).toHaveLength(2);
     expect(findRecord(fs, "/repo", first.id).metadata.parent).toBe(prd.id);
+    // Existing repositories may have unrelated Markdown in these directories.
+    fs.writeFileSync("/repo/docs/product/overview.md", "# Unmanaged document\\n");
+    expect(listRecords(fs, "/repo").map((item) => item.id)).toContain(prd.id);
     expect(fs.readFileSync("/repo/docs/work/items/README.md", "utf8")).toContain("[STORY-0001: Create a document]");
     expect(fs.readFileSync("/repo/docs/decisions/README.md", "utf8")).toContain(adr.id);
   });
@@ -21,6 +24,7 @@ describe("versioned knowledge and work records", () => {
     const { fs, initialize } = fixture();
     initialize();
     expect(() => addRecord(fs, "/repo", { type: "story", title: "Orphan" })).toThrow(/--parent/);
+    expect(() => addRecord(fs, "/repo", { type: "prd", title: "Injected\\nHeading" })).toThrow(/single line/);
     expect(() => addRecord(fs, "/repo", { type: "story", title: "Bad parent", parent: "PRD-9999" })).toThrow(/Unknown PRD/);
     const prd = addRecord(fs, "/repo", { type: "prd", title: "Service" });
     const note = addRecord(fs, "/repo", { type: "note", title: "Possible issue", source: prd.id });

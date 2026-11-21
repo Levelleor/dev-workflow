@@ -25,4 +25,4 @@ Archive completed plans or obsolete notes with traceable IDs; supersede ADRs rat
 
 ## Initial implementation status
 
-These are documented conventions. Automatic ID allocation, link validation, generated indexes, conflict resolution and context retrieval are **not implemented**. See [templates](../../templates/records/README.md).
+These are documented conventions. The CLI now allocates IDs for PRDs, ADRs, stories and inbox notes, validates references supplied during creation, and appends category-index links. Repository-wide link linting, generated reverse indexes, merge-conflict reconciliation and session context retrieval are **not yet implemented**. See [templates](../../templates/records/README.md).
