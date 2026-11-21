@@ -36,3 +36,47 @@ describe("task CLI", () => {
     expect(output[0]).toContain("Dependencies must be");
   });
 });
+
+describe("explicit ID CLI consistency", () => {
+  it("supports positional IDs across claim, getcontext and complete with JSON output", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const prd = addRecord(fs, "/repo", { type: "prd", title: "Product" });
+    const task = addRecord(fs, "/repo", { type: "story", title: "Chosen task", parent: prd.id });
+    const output: string[] = [];
+    const errors: string[] = [];
+    const run = (argv: string[]) => runCli(argv, {
+      fs, cwd: "/repo", output: (value) => output.push(value), error: (value) => errors.push(value),
+    });
+    expect(run(["task", "claim", task.id, "--json"])).toBe(0);
+    expect(JSON.parse(output.at(-1)!).context.task.id).toBe(task.id);
+    expect(run(["task", "getcontext", task.id, "--json"])).toBe(0);
+    expect(JSON.parse(output.at(-1)!).task.status).toBe("in-progress");
+    expect(run(["task", "complete", task.id, "--json"])).toBe(0);
+    expect(JSON.parse(output.at(-1)!)).toEqual({ id: task.id, status: "implemented" });
+    expect(errors).toEqual([]);
+  });
+
+  it("uses the same unavailable diagnostic for explicit and next claims", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const output: string[] = [];
+    const run = (argv: string[]) => runCli(argv, { fs, cwd: "/repo", output: (value) => output.push(value) });
+    expect(run(["task", "claim", "STORY-9999", "--json"])).toBe(2);
+    expect(JSON.parse(output.at(-1)!).code).toBe("UNKNOWN_TASK");
+    expect(run(["task", "claim", "next", "--json"])).toBe(2);
+    expect(JSON.parse(output.at(-1)!).code).toBe("NO_PENDING_TASKS");
+  });
+
+  it("rejects mixed task ID syntax and extra positional arguments", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const errors: string[] = [];
+    const run = (argv: string[]) => runCli(argv, { fs, cwd: "/repo", error: (value) => errors.push(value) });
+    expect(run(["task", "claim", "--id", "STORY-0001"])).toBe(1);
+    expect(errors.at(-1)).toContain("positional");
+    expect(run(["task", "getcontext", "STORY-0001", "STORY-0002"])).toBe(1);
+    expect(errors.at(-1)).toContain("Usage:");
+    expect(run(["task", "claim", "next", "STORY-0001"])).toBe(1);
+  });
+});

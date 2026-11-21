@@ -4,9 +4,9 @@ This repository builds `agentctl` and uses it for its own planning. Pi loads thi
 
 ## Start work
 
-1. Run `agentctl task claim next` to deterministically claim a pending task and receive its complete implementation prompt. Exit code 2 explains when no task is available.
-2. Run `agentctl task getcontext` to resume the in-progress task. Do not manually traverse planning files when `agentctl` provides their context.
-3. Implement and test with `npm run check`, then run `agentctl task complete`. This means **implemented**, not independently verified or integrated.
+1. Run `agentctl task claim next` to choose by priority, or `agentctl task claim STORY-0001` to select an exact task. Both return a complete implementation prompt. Exit code 2 explains when a claim is unavailable.
+2. Run `agentctl task getcontext [STORY-0001]` to resume the in-progress task. Do not manually traverse planning files when `agentctl` provides their context.
+3. Implement and test with `npm run check`, then run `agentctl task complete [STORY-0001]`. This means **implemented**, not independently verified or integrated.
 4. Use `agentctl --help` for command usage and `--json` for structured task results.
 
 ## Working conventions

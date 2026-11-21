@@ -6,7 +6,7 @@ import { findProjectRoot, initProject, readYaml } from "./project.js";
 import { addRecord, findRecord, listRecords, type RecordType } from "./records.js";
 import { getSetting, setSetting, showConfig } from "./config.js";
 import { runCommand, verify, type RunCommand } from "./verify.js";
-import { claimNextTask, completeTask, getActiveTaskContext } from "./task.js";
+import { claimTask, completeTask, getActiveTaskContext } from "./task.js";
 
 export type CliOptions = {
   cwd?: string;
@@ -23,9 +23,10 @@ Usage:
   agentctl init [directory]                         Safely install project files
   agentctl doctor                                   Inspect project setup
   agentctl status [--json]                          Show project and task counts
-  agentctl task claim next [--json]                 Claim next ready task and output its complete implementation prompt
-  agentctl task getcontext [--id ID] [--json]       Resume the in-progress task
-  agentctl task complete [ID] [--json]              Mark the in-progress task implemented
+  agentctl task claim <ID|next> [--json]            Claim a specific or next eligible task, with context
+  Example: agentctl task claim next                  Select automatically by priority
+  agentctl task getcontext [ID] [--json]            Resume an in-progress task
+  agentctl task complete [ID] [--json]              Mark an in-progress task implemented
   agentctl work list|show ID|add --title T --parent PRD-ID
   agentctl knowledge list [--type prd|adr|note]
   agentctl knowledge show ID
@@ -36,7 +37,9 @@ Usage:
   agentctl help | --help | --version
 
 Task lifecycle: pending/ready -> in-progress -> implemented (not verified).
-Task selection: priority 1..5 (1 highest, default 3), then stable ID.
+Task IDs use stable STORY-0001 format and are positional across task commands.
+'next' uses priority 1..5 (1 highest, default 3), then stable ID.
+Claiming an explicit ID bypasses priority but still checks dependencies and ownership.
 Dependencies must be implemented/completed/accepted; proposed tasks cannot be claimed.
 Only one in-progress task per working tree. Unavailable claims explain why (exit 2).
 --json outputs structured context or diagnostics for calling agents.
@@ -124,8 +127,10 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     }
 
     if (command === "task") {
-      if (action === "claim" && rest[0] === "next") {
-        const result = claimNextTask(fs, root);
+      if (Object.hasOwn(flags, "id")) throw new Error("Use positional task IDs, e.g. 'agentctl task claim STORY-0001'.");
+      if (action === "claim") {
+        if (rest.length !== 1) throw new Error("Usage: agentctl task claim <ID|next> [--json]");
+        const result = claimTask(fs, root, rest[0]);
         if (!result.ok) {
           emit(json ? result : [result.message, ...result.blocked.map((task) => `${task.id}: ${task.reasons.join("; ")}`)].join("\n"));
           return 2;
@@ -134,16 +139,18 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
         return 0;
       }
       if (action === "getcontext") {
-        const context = getActiveTaskContext(fs, root, flag(flags, "id") ?? rest[0]);
+        if (rest.length > 1) throw new Error("Usage: agentctl task getcontext [ID] [--json]");
+        const context = getActiveTaskContext(fs, root, rest[0]);
         emit(json ? context : context.prompt);
         return 0;
       }
       if (action === "complete") {
-        const completed = completeTask(fs, root, flag(flags, "id") ?? rest[0]);
+        if (rest.length > 1) throw new Error("Usage: agentctl task complete [ID] [--json]");
+        const completed = completeTask(fs, root, rest[0]);
         emit(json ? { id: completed.id, status: completed.status } : `${completed.id} marked implemented. Verification and acceptance are separate.`);
         return 0;
       }
-      throw new Error("Usage: agentctl task claim next | task getcontext [--id ID] | task complete [ID]");
+      throw new Error("Usage: agentctl task claim <ID|next> | task getcontext [ID] | task complete [ID]");
     }
 
     if (command === "work") {

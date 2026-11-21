@@ -34,13 +34,16 @@ jobs:
           cli="$GITHUB_WORKSPACE/packages/cli/dist/index.js"
           (cd "$tmp" && node "$cli" knowledge add --type prd --title "Smoke product")
           (cd "$tmp" && node "$cli" work add --title "Smoke implementation" --parent PRD-0001)
-          (cd "$tmp" && node "$cli" task claim next > "$tmp/claim-prompt.md")
-          grep -q "Smoke implementation" "$tmp/claim-prompt.md"
+          (cd "$tmp" && node "$cli" work add --title "Explicitly selected" --parent PRD-0001)
+          (cd "$tmp" && node "$cli" task claim STORY-0002 > "$tmp/claim-prompt.md")
+          grep -q "Explicitly selected" "$tmp/claim-prompt.md"
           grep -q "Smoke product" "$tmp/claim-prompt.md"
-          (cd "$tmp" && node "$cli" task getcontext > "$tmp/resumed-prompt.md")
-          grep -q "Smoke implementation" "$tmp/resumed-prompt.md"
-          (cd "$tmp" && node "$cli" task complete)
-          grep -q "status: implemented" "$tmp/docs/work/items/STORY-0001-smoke-implementation.md"
+          (cd "$tmp" && node "$cli" task getcontext STORY-0002 > "$tmp/resumed-prompt.md")
+          grep -q "Explicitly selected" "$tmp/resumed-prompt.md"
+          (cd "$tmp" && node "$cli" task complete STORY-0002)
+          grep -q "status: implemented" "$tmp/docs/work/items/STORY-0002-explicitly-selected.md"
+          (cd "$tmp" && node "$cli" task claim next > "$tmp/next-prompt.md")
+          grep -q "Smoke implementation" "$tmp/next-prompt.md"
       - name: Check npm package contents
         run: |
           npm pack --workspace @levelleor/agentctl --dry-run --json > pack.json
