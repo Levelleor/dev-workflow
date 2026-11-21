@@ -1,39 +1,132 @@
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { performance } from "node:perf_hooks";
+import { isMap, parseDocument } from "yaml";
 import type { FileSystem } from "./fs.js";
+import { writeFileAtomically } from "./fs.js";
 import { readYaml } from "./project.js";
 
-export type RunCommand = (command: string, cwd: string, timeoutMs: number) => number;
-export type CheckReceipt = { name: string; command: string; passed: boolean };
-export type VerifyResult = { profile: string; passed: boolean; checks: CheckReceipt[] };
+export type Gate = { name: string; command: string; timeoutSeconds: number; required: boolean };
+export type CommandOutcome = {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  timedOut?: boolean;
+};
+export type RunCommand = (command: string, cwd: string, timeoutMs: number) => CommandOutcome;
+export type CheckReceipt = Gate & CommandOutcome & { passed: boolean };
+export type VerifyResult = { selection: string; passed: boolean; checks: CheckReceipt[] };
+
+const MAX_OUTPUT = 8000;
+const MAX_BUFFER = 1024 * 1024;
+const gateName = /^[a-z][a-z0-9-]*$/;
 
 export const runCommand: RunCommand = (command, cwd, timeoutMs) => {
-  const child = spawnSync(command, { cwd, timeout: timeoutMs, shell: true, stdio: "inherit" });
-  return child.status ?? 1;
+  const start = performance.now();
+  const child = spawnSync(command, {
+    cwd, timeout: timeoutMs, shell: true, encoding: "utf8",
+    stdio: "pipe", maxBuffer: MAX_BUFFER,
+  });
+  const stderr = (child.stderr ?? "") + (child.error ? `\n${child.error.message}` : "");
+  return {
+    exitCode: child.error ? null : child.status,
+    stdout: (child.stdout ?? "").slice(-MAX_OUTPUT),
+    stderr: stderr.slice(-MAX_OUTPUT),
+    durationMs: Math.round(performance.now() - start),
+    timedOut: child.error?.code === "ETIMEDOUT",
+  };
 };
 
+function namedGates(fs: FileSystem, root: string): Map<string, Gate> {
+  const config = readYaml(fs, join(root, ".agentctl", "checks.yaml"));
+  const values = config.checks;
+  if (!values || typeof values !== "object" || Array.isArray(values)) {
+    throw new Error("Verification checks must be a YAML mapping.");
+  }
+  const result = new Map<string, Gate>();
+  for (const [name, value] of Object.entries(values)) {
+    if (!gateName.test(name) || !value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`Invalid verification gate: ${name}`);
+    }
+    const spec = value as Record<string, unknown>;
+    if (typeof spec.command !== "string" || !spec.command.trim()) {
+      throw new Error(`Verification gate '${name}' has no command.`);
+    }
+    const timeoutSeconds = spec.timeoutSeconds ?? 120;
+    if (typeof timeoutSeconds !== "number" || !Number.isInteger(timeoutSeconds) || timeoutSeconds < 1) {
+      throw new Error(`Invalid timeout for gate '${name}'.`);
+    }
+    if (spec.required !== undefined && typeof spec.required !== "boolean") {
+      throw new Error(`Invalid required flag for gate '${name}'.`);
+    }
+    result.set(name, {
+      name, command: spec.command, timeoutSeconds,
+      required: spec.required !== false,
+    });
+  }
+  return result;
+}
+
+export function listGates(fs: FileSystem, root: string): Gate[] {
+  return [...namedGates(fs, root).values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Create an additional gate without changing or removing existing verification policy. */
+export function addGate(
+  fs: FileSystem, root: string, name: string, command: string, timeoutSeconds = 120,
+): Gate {
+  if (!gateName.test(name) || ["list", "add", "all"].includes(name)) {
+    throw new Error("Gate names must begin with a letter and contain only lowercase letters, digits and hyphens.");
+  }
+  if (!command.trim()) throw new Error("A verification command is required.");
+  if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1) {
+    throw new Error("Gate timeout must be a positive integer in seconds.");
+  }
+  if (namedGates(fs, root).has(name)) throw new Error(`Gate '${name}' already exists; existing gates cannot be overwritten.`);
+
+  const file = join(root, ".agentctl", "checks.yaml");
+  const document = parseDocument(fs.readFileSync(file, "utf8"));
+  if (document.errors.length || !isMap(document.get("checks", true))) {
+    throw new Error("Cannot update invalid verification configuration.");
+  }
+  document.setIn(["checks", name], { command, timeoutSeconds, required: true });
+  writeFileAtomically(fs, file, document.toString());
+  return { name, command, timeoutSeconds, required: true };
+}
+
 export function verify(
-  fs: FileSystem, root: string, profile: string, runner: RunCommand = runCommand,
+  fs: FileSystem, root: string, target = "all",
+  runner: RunCommand = runCommand, mode: "gate" | "profile" = "gate",
 ): VerifyResult {
-  const policy = readYaml(fs, join(root, ".agentctl", "checks.yaml"));
-  const profiles = policy.profiles as Record<string, unknown> | undefined;
-  const checks = policy.checks as Record<string, unknown> | undefined;
-  const selected = profiles?.[profile];
-  if (!Array.isArray(selected) || selected.length === 0) {
-    throw new Error(`Verification profile '${profile}' is missing or empty. No checks were run.`);
+  const gates = namedGates(fs, root);
+  let names: string[];
+  if (mode === "profile") {
+    const policy = readYaml(fs, join(root, ".agentctl", "checks.yaml"));
+    const profiles = policy.profiles as Record<string, unknown> | undefined;
+    const selected = profiles?.[target];
+    if (!Array.isArray(selected) || selected.length === 0) {
+      throw new Error(`Verification profile '${target}' is missing or empty. No checks were run.`);
+    }
+    if (selected.some((name) => typeof name !== "string")) {
+      throw new Error(`Invalid verification profile '${target}'.`);
+    }
+    names = selected as string[];
+  } else if (target === "all") {
+    names = [...gates.keys()].sort();
+    if (!names.length) throw new Error("No verification gates registered. Use 'agentctl verify add'.");
+  } else {
+    names = [target];
+  }
+  for (const name of names) {
+    if (!gates.has(name)) throw new Error(`Verification gate '${name}' is not registered.`);
   }
   const receipts: CheckReceipt[] = [];
-  for (const name of selected) {
-    if (typeof name !== "string") throw new Error("Invalid verification check name.");
-    const spec = checks?.[name] as Record<string, unknown> | undefined;
-    if (!spec || typeof spec.command !== "string" || !spec.command.trim()) {
-      throw new Error(`Verification check '${name}' is not configured.`);
-    }
-    const timeout = typeof spec.timeoutSeconds === "number" && spec.timeoutSeconds > 0
-      ? spec.timeoutSeconds * 1000 : 120000;
-    const passed = runner(spec.command, root, timeout) === 0;
-    receipts.push({ name, command: spec.command, passed });
-    if (!passed) break;
+  for (const name of names) {
+    const gate = gates.get(name)!;
+    const outcome = runner(gate.command, root, gate.timeoutSeconds * 1000);
+    receipts.push({ ...gate, ...outcome, passed: outcome.exitCode === 0 && !outcome.timedOut });
   }
-  return { profile, passed: receipts.length === selected.length && receipts.every((r) => r.passed), checks: receipts };
+  return { selection: mode === "profile" ? `profile:${target}` : target,
+    passed: receipts.every((receipt) => receipt.passed), checks: receipts };
 }

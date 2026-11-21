@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { FileSystem } from "./fs.js";
+import { writeFileAtomically, type FileSystem } from "./fs.js";
 import { listRecords, type RecordEntry } from "./records.js";
 import { buildTaskContext, type TaskContext } from "./context.js";
 
@@ -128,7 +128,7 @@ export function selectTaskById(fs: FileSystem, root: string, id: string): TaskSe
   return { ok: true, task };
 }
 
-function withTaskLock<T>(fs: FileSystem, root: string, action: () => T): T {
+export function withTaskLock<T>(fs: FileSystem, root: string, action: () => T): T {
   const directory = join(root, ".agentctl", "runtime");
   const lock = join(directory, "task.lock");
   fs.mkdirSync(directory, { recursive: true });
@@ -151,13 +151,7 @@ function changeStatus(fs: FileSystem, record: RecordEntry, status: "in-progress"
   const front = match[1];
   if (!/^status:\s*\S.*$/m.test(front)) throw new Error(`Missing status field in ${record.id}.`);
   const updated = front.replace(/^status:\s*\S.*$/m, `status: ${status}`) + raw.slice(front.length);
-  const temporary = `${record.file}.agentctl.tmp`;
-  fs.writeFileSync(temporary, updated, { encoding: "utf8", flag: "wx" });
-  try {
-    fs.renameSync(temporary, record.file);
-  } finally {
-    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
-  }
+  writeFileAtomically(fs, record.file, updated);
 }
 
 function activeTask(fs: FileSystem, root: string, id?: string): RecordEntry {

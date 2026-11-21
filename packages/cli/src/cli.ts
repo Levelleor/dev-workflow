@@ -5,7 +5,8 @@ import { disk } from "./fs.js";
 import { findProjectRoot, initProject, readYaml } from "./project.js";
 import { addRecord, findRecord, listRecords, type RecordType } from "./records.js";
 import { getSetting, setSetting, showConfig } from "./config.js";
-import { runCommand, verify, type RunCommand } from "./verify.js";
+import { addGate, listGates, runCommand, verify, type RunCommand } from "./verify.js";
+import { addTaskNote, listTaskNotes, removeTaskNote } from "./task-notes.js";
 import { claimTask, completeTask, getActiveTaskContext } from "./task.js";
 
 export type CliOptions = {
@@ -27,13 +28,21 @@ Usage:
   Example: agentctl task claim next                  Select automatically by priority
   agentctl task getcontext [ID] [--json]            Resume an in-progress task
   agentctl task complete [ID] [--json]              Mark an in-progress task implemented
+  agentctl task notes add "text" [--json]            Add a note to the current task
+  agentctl task notes list [--json]                  List notes on the current task
+  agentctl task notes remove N001                    Remove a task note
+  agentctl task STORY-0001 notes add|list|remove     Address a task by stable ID
   agentctl work list|show ID|add --title T --parent PRD-ID
   agentctl knowledge list [--type prd|adr|note]
   agentctl knowledge show ID
   agentctl knowledge add --type prd|adr --title TEXT
   agentctl knowledge capture TEXT --source ID
   agentctl config show|get KEY|set KEY VALUE
-  agentctl verify [--profile NAME]
+  agentctl verify [--json]                          Run every registered gate
+  agentctl verify list [--json]                     List verification gates
+  agentctl verify <gate> [--json]                   Run one named gate
+  agentctl verify add <gate> [--timeout N] -- CMD   Register a shell command as a gate
+  agentctl verify --profile NAME [--json]          Run an existing check profile
   agentctl help | --help | --version
 
 Task lifecycle: pending/ready -> in-progress -> implemented (not verified).
@@ -43,6 +52,9 @@ Claiming an explicit ID bypasses priority but still checks dependencies and owne
 Dependencies must be implemented/completed/accepted; proposed tasks cannot be claimed.
 Only one in-progress task per working tree. Unavailable claims explain why (exit 2).
 --json outputs structured context or diagnostics for calling agents.
+Verify gates use exit status 0 for success; failures return exit status 1.
+Gate registration never replaces an existing gate. Use -- before its command.
+Task notes are versioned in each story's Markdown and included in task context.
 Project and task documentation stays in Git; Ultracode execution is separate.
 `;
 
@@ -85,7 +97,10 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
   const error = options.error ?? console.error;
 
   try {
-    const { args, flags } = argumentsOf(argv);
+    // Everything after '--' in verify add belongs to the registered command.
+    const separator = argv[0] === "verify" && argv[1] === "add" ? argv.indexOf("--") : -1;
+    const gateCommand = separator >= 0 ? argv.slice(separator + 1) : [];
+    const { args, flags } = argumentsOf(separator >= 0 ? argv.slice(0, separator) : argv);
     const [command, action, ...rest] = args;
     const json = flags.json === true;
     const emit = (value: unknown) => output(json ? JSON.stringify(value, null, 2) : typeof value === "string" ? value : JSON.stringify(value, null, 2));
@@ -127,6 +142,26 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     }
 
     if (command === "task") {
+      if (action === "notes" || rest[0] === "notes") {
+        const id = action === "notes" ? undefined : action;
+        const [operation, ...values] = action === "notes" ? rest : rest.slice(1);
+        if (operation === "list" && values.length === 0) {
+          const result = listTaskNotes(fs, root, id);
+          emit(json ? result : result.notes.map((note) => `${note.id}: ${note.text}`).join("\n") || "No notes.");
+          return 0;
+        }
+        if (operation === "add" && values.length === 1) {
+          const note = addTaskNote(fs, root, values[0], id);
+          emit(json ? note : `Added ${note.id}: ${note.text}`);
+          return 0;
+        }
+        if (operation === "remove" && values.length === 1) {
+          const note = removeTaskNote(fs, root, values[0], id);
+          emit(json ? note : `Removed ${note.id}.`);
+          return 0;
+        }
+        throw new Error('Usage: agentctl task [ID] notes add "text" | list | remove N001');
+      }
       if (Object.hasOwn(flags, "id")) throw new Error("Use positional task IDs, e.g. 'agentctl task claim STORY-0001'.");
       if (action === "claim") {
         if (rest.length !== 1) throw new Error("Usage: agentctl task claim <ID|next> [--json]");
@@ -201,8 +236,40 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     }
 
     if (command === "verify") {
-      const result = verify(fs, root, flag(flags, "profile") ?? "scaffold", runner);
-      emit(result);
+      if (action === "list") {
+        if (rest.length) throw new Error("Usage: agentctl verify list [--json]");
+        const gates = listGates(fs, root);
+        emit(json ? gates : gates.map((gate) =>
+          `${gate.name}: ${gate.command} (${gate.timeoutSeconds}s)`).join("\n") || "No gates registered.");
+        return 0;
+      }
+      if (action === "add") {
+        if (rest.length !== 1 || separator < 0 || !gateCommand.length) {
+          throw new Error("Usage: agentctl verify add <name> [--timeout N] -- <command> [args...]");
+        }
+        const rawTimeout = flag(flags, "timeout");
+        if (Object.hasOwn(flags, "timeout") && rawTimeout === undefined) {
+          throw new Error("Use --timeout with a positive integer in seconds.");
+        }
+        const timeout = rawTimeout === undefined ? 120 : Number(rawTimeout);
+        // Preserve argument boundaries when the shell executes this configured command.
+        const quoted = gateCommand.map((word) =>
+          /^[a-zA-Z0-9_./:@=+,\\-]+$/.test(word) ? word : `'${word.replaceAll("'", "'\\\\''")}'`);
+        const gate = addGate(fs, root, rest[0], quoted.join(" "), timeout);
+        emit(json ? gate : `Added gate ${gate.name}: ${gate.command}`);
+        return 0;
+      }
+      if (rest.length || (action && flag(flags, "profile"))) {
+        throw new Error("Usage: agentctl verify [gate] [--json] | --profile NAME | list | add");
+      }
+      const profile = flag(flags, "profile");
+      const result = verify(fs, root, profile ?? action ?? "all", runner, profile ? "profile" : "gate");
+      if (json) emit(result);
+      else for (const check of result.checks) {
+        output(`[${check.passed ? "PASS" : "FAIL"}] ${check.name} (${check.durationMs}ms)`);
+        if (check.stdout) output(check.stdout);
+        if (check.stderr) output(check.stderr);
+      }
       return result.passed ? 0 : 1;
     }
 
