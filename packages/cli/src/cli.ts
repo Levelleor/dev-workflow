@@ -254,7 +254,7 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
         const timeout = rawTimeout === undefined ? 120 : Number(rawTimeout);
         // Preserve argument boundaries when the shell executes this configured command.
         const quoted = gateCommand.map((word) =>
-          /^[a-zA-Z0-9_./:@=+,\\-]+$/.test(word) ? word : `'${word.replaceAll("'", "'\\\\''")}'`);
+          /^[a-zA-Z0-9_./:@=+,\\-]+$/.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`);
         const gate = addGate(fs, root, rest[0], quoted.join(" "), timeout);
         emit(json ? gate : `Added gate ${gate.name}: ${gate.command}`);
         return 0;
