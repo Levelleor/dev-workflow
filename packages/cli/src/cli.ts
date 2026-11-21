@@ -6,6 +6,7 @@ import { findProjectRoot, initProject, readYaml } from "./project.js";
 import { addRecord, findRecord, listRecords, type RecordType } from "./records.js";
 import { getSetting, setSetting, showConfig } from "./config.js";
 import { runCommand, verify, type RunCommand } from "./verify.js";
+import { claimNextTask, completeTask, getActiveTaskContext } from "./task.js";
 
 export type CliOptions = {
   cwd?: string;
@@ -16,23 +17,30 @@ export type CliOptions = {
   error?: (message: string) => void;
 };
 
-const help = `agentctl: repository-backed AI development harness (CLI foundation)
+const help = `agentctl: repository-backed coding-agent development workflow
 
 Usage:
-  agentctl init [directory]              Add harness files without overwriting
-  agentctl doctor                        Inspect project setup and verification
-  agentctl status                        Summarise project and work items
-  agentctl work list|show <id>|add --title <text> --parent <PRD-ID>
+  agentctl init [directory]                         Safely install project files
+  agentctl doctor                                   Inspect project setup
+  agentctl status [--json]                          Show project and task counts
+  agentctl task claim next [--json]                 Claim next ready task and output its complete implementation prompt
+  agentctl task getcontext [--id ID] [--json]       Resume the in-progress task
+  agentctl task complete [ID] [--json]              Mark the in-progress task implemented
+  agentctl work list|show ID|add --title T --parent PRD-ID
   agentctl knowledge list [--type prd|adr|note]
-  agentctl knowledge show <id>
-  agentctl knowledge add --type prd|adr --title <text>
-  agentctl knowledge capture <text> --source <record-id>
-  agentctl config show|get <path>|set <path> <value>
-  agentctl verify [--profile scaffold]
-  agentctl --help | --version
+  agentctl knowledge show ID
+  agentctl knowledge add --type prd|adr --title TEXT
+  agentctl knowledge capture TEXT --source ID
+  agentctl config show|get KEY|set KEY VALUE
+  agentctl verify [--profile NAME]
+  agentctl help | --help | --version
 
-Use --json with status, doctor, work list/show/add, knowledge and verify.
-Agent execution will be integrated through Ultracode separately.
+Task lifecycle: pending/ready -> in-progress -> implemented (not verified).
+Task selection: priority 1..5 (1 highest, default 3), then stable ID.
+Dependencies must be implemented/completed/accepted; proposed tasks cannot be claimed.
+Only one in-progress task per working tree. Unavailable claims explain why (exit 2).
+--json outputs structured context or diagnostics for calling agents.
+Project and task documentation stays in Git; Ultracode execution is separate.
 `;
 
 type Flag = string | boolean;
@@ -113,6 +121,29 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
         notes: records.filter((r) => r.type === "note").length,
       }, activeStories: records.filter((r) => r.type === "story" && !["completed", "accepted", "superseded"].includes(r.status)).length });
       return 0;
+    }
+
+    if (command === "task") {
+      if (action === "claim" && rest[0] === "next") {
+        const result = claimNextTask(fs, root);
+        if (!result.ok) {
+          emit(json ? result : [result.message, ...result.blocked.map((task) => `${task.id}: ${task.reasons.join("; ")}`)].join("\n"));
+          return 2;
+        }
+        emit(json ? result : result.context.prompt);
+        return 0;
+      }
+      if (action === "getcontext") {
+        const context = getActiveTaskContext(fs, root, flag(flags, "id") ?? rest[0]);
+        emit(json ? context : context.prompt);
+        return 0;
+      }
+      if (action === "complete") {
+        const completed = completeTask(fs, root, flag(flags, "id") ?? rest[0]);
+        emit(json ? { id: completed.id, status: completed.status } : `${completed.id} marked implemented. Verification and acceptance are separate.`);
+        return 0;
+      }
+      throw new Error("Usage: agentctl task claim next | task getcontext [--id ID] | task complete [ID]");
     }
 
     if (command === "work") {

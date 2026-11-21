@@ -19,6 +19,16 @@ knowledge:
     - docs/work
   inbox: docs/knowledge/inbox
 
+context:
+  include:
+    - AGENTS.md
+    - docs/product/PRD-0001.md
+    - docs/knowledge/README.md
+  reference:
+    - docs/architecture/overview.md
+    - docs/decisions/README.md
+    - docs/work/README.md
+
 orchestration:
   engine: ultracode
   mode: sequential

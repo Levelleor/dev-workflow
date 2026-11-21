@@ -1,9 +1,10 @@
 ---
 id: STORY-XXXX
 type: story
-status: proposed
+status: pending
 parent: PRD-XXXX
 depends_on: []
+priority: 3
 related: []
 ---
 

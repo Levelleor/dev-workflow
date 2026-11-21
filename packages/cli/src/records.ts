@@ -101,11 +101,11 @@ export function addRecord(fs: FileSystem, root: string, input: NewRecord): Recor
   const dir = join(root, directories[input.type]);
   const file = join(dir, `${id}-${slug(title)}.md`);
   const metadata: Record<string, unknown> = {
-    id, type: input.type, status: input.type === "note" ? "inbox" : "proposed",
+    id, type: input.type, status: input.type === "note" ? "inbox" : input.type === "story" ? "pending" : "proposed",
   };
   if (input.parent) metadata.parent = input.parent;
   if (input.source) metadata.source = input.source;
-  if (input.type === "story") metadata.depends_on = [];
+  if (input.type === "story") { metadata.depends_on = []; metadata.priority = 3; }
   metadata.related = input.related ?? [];
   const sections: Record<RecordType, string> = {
     story: "## Outcome\n\n## Acceptance criteria\n\n## Verification plan\n",

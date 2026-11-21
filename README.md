@@ -2,7 +2,7 @@
 
 A repository-backed, cost-conscious coding-agent harness for Pi, with **Ultracode selected for orchestration**.
 
-The first functional component is **agentctl**, a TypeScript CLI for repository bootstrap, typed work and knowledge records, configuration inspection and local deterministic check profiles. Automated agent execution, review and integration remain future milestones.
+The first functional component is **agentctl**, a TypeScript CLI for repository bootstrap, deterministic sequential task claiming and context assembly, typed knowledge records, configuration inspection and local check profiles. Automated agent execution, review and integration remain future milestones.
 
 ## Monorepo
 
