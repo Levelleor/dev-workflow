@@ -44,6 +44,28 @@ jobs:
           grep -q "status: implemented" "$tmp/docs/work/items/STORY-0002-explicitly-selected.md"
           (cd "$tmp" && node "$cli" task claim next > "$tmp/next-prompt.md")
           grep -q "Smoke implementation" "$tmp/next-prompt.md"
+          (cd "$tmp" && node "$cli" task notes add "Investigate smoke" --json > "$tmp/note.json")
+          grep -q '"id": "N001"' "$tmp/note.json"
+          (cd "$tmp" && node "$cli" task notes list --json > "$tmp/notes.json")
+          grep -q "Investigate smoke" "$tmp/notes.json"
+          (cd "$tmp" && node "$cli" task getcontext STORY-0001 > "$tmp/context-with-note.md")
+          grep -q "Investigate smoke" "$tmp/context-with-note.md"
+          (cd "$tmp" && node "$cli" task STORY-0001 notes remove N001)
+          (cd "$tmp" && node "$cli" task STORY-0001 notes list --json > "$tmp/notes-after.json")
+          node -e 'const d=require(process.argv[1]); if (d.notes.length) process.exit(1)' "$tmp/notes-after.json"
+          (cd "$tmp" && node "$cli" verify add green -- node -e 'process.exit(0)')
+          (cd "$tmp" && node "$cli" verify list --json > "$tmp/gates.json")
+          grep -q '"name": "green"' "$tmp/gates.json"
+          (cd "$tmp" && node "$cli" verify --json > "$tmp/all-gates.json")
+          node -e 'const d=require(process.argv[1]); if (!d.passed || d.checks.length !== 1) process.exit(1)' "$tmp/all-gates.json"
+          (cd "$tmp" && node "$cli" verify green --json > "$tmp/green.json")
+          node -e 'const d=require(process.argv[1]); if (!d.passed) process.exit(1)' "$tmp/green.json"
+          (cd "$tmp" && node "$cli" verify add red -- node -e 'process.exit(2)')
+          if (cd "$tmp" && node "$cli" verify red --json > "$tmp/red.json"); then
+            echo "A failing gate unexpectedly passed"
+            exit 1
+          fi
+          node -e 'const d=require(process.argv[1]); if (d.passed || d.checks[0].exitCode !== 2) process.exit(1)' "$tmp/red.json"
       - name: Check npm package contents
         run: |
           npm pack --workspace @levelleor/agentctl --dry-run --json > pack.json

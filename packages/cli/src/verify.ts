@@ -34,7 +34,7 @@ export const runCommand: RunCommand = (command, cwd, timeoutMs) => {
     stdout: (child.stdout ?? "").slice(-MAX_OUTPUT),
     stderr: stderr.slice(-MAX_OUTPUT),
     durationMs: Math.round(performance.now() - start),
-    timedOut: child.error?.code === "ETIMEDOUT",
+    timedOut: (child.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT",
   };
 };
 
