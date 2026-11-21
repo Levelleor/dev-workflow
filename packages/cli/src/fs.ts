@@ -7,6 +7,8 @@ export interface FileSystem {
   writeFileSync(path: string, data: string, options?: { encoding?: "utf8"; flag?: string }): void;
   mkdirSync(path: string, options?: { recursive: true }): unknown;
   rmdirSync(path: string): void;
+  renameSync(oldPath: string, newPath: string): void;
+  unlinkSync(path: string): void;
   readdirSync(path: string): string[];
 }
 

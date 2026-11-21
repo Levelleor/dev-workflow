@@ -30,6 +30,7 @@ describe("deterministic task claiming", () => {
     expect(result.context.prompt).toContain("Deliver useful software");
     expect(result.context.prompt).toContain("First task");
     expect(findRecord(fs, "/repo", higher.id).status).toBe("in-progress");
+    expect(fs.existsSync(`${higher.file}.agentctl.tmp`)).toBe(false);
     expect(selectNextTask(fs, "/repo")).toMatchObject({ ok: false, code: "TASK_IN_PROGRESS" });
     expect(getActiveTaskContext(fs, "/repo").task.id).toBe(higher.id);
     const completed = completeTask(fs, "/repo");
@@ -117,6 +118,16 @@ describe("deterministic task claiming", () => {
     expect(claimed.context.prompt).toContain("Focused plan");
     expect(claimed.context.prompt).not.toContain("# Unreviewed approach");
     expect(claimed.context.references).toContain("docs/decisions/" + proposed.id + "-unreviewed-approach.md");
+  });
+
+  it("does not truncate a record if a leftover temporary file prevents the update", () => {
+    const { fs, prd } = setup();
+    const story = addRecord(fs, "/repo", { type: "story", title: "Crash protection", parent: prd.id });
+    fs.writeFileSync(`${story.file}.agentctl.tmp`, "Unfinished previous write");
+    expect(() => claimNextTask(fs, "/repo")).toThrow();
+    expect(findRecord(fs, "/repo", story.id).status).toBe("pending");
+    expect(fs.readFileSync(`${story.file}.agentctl.tmp`, "utf8")).toBe("Unfinished previous write");
+    expect(fs.existsSync("/repo/.agentctl/runtime/task.lock")).toBe(false);
   });
 
   it("enforces context path boundaries", () => {

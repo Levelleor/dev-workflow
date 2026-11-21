@@ -119,7 +119,7 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
         prds: records.filter((r) => r.type === "prd").length,
         adrs: records.filter((r) => r.type === "adr").length,
         notes: records.filter((r) => r.type === "note").length,
-      }, activeStories: records.filter((r) => r.type === "story" && !["completed", "accepted", "superseded"].includes(r.status)).length });
+      }, activeStories: records.filter((r) => r.type === "story" && ["pending", "ready", "in-progress"].includes(r.status)).length });
       return 0;
     }
 

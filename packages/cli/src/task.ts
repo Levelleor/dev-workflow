@@ -104,7 +104,13 @@ function changeStatus(fs: FileSystem, record: RecordEntry, status: "in-progress"
   const front = match[1];
   if (!/^status:\s*\S.*$/m.test(front)) throw new Error(`Missing status field in ${record.id}.`);
   const updated = front.replace(/^status:\s*\S.*$/m, `status: ${status}`) + raw.slice(front.length);
-  fs.writeFileSync(record.file, updated, { encoding: "utf8" });
+  const temporary = `${record.file}.agentctl.tmp`;
+  fs.writeFileSync(temporary, updated, { encoding: "utf8", flag: "wx" });
+  try {
+    fs.renameSync(temporary, record.file);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
 }
 
 function activeTask(fs: FileSystem, root: string, id?: string): RecordEntry {
