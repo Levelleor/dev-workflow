@@ -13,3 +13,14 @@ export interface FileSystem {
 }
 
 export const disk: FileSystem = fs;
+
+/** Replace a tracked text file without exposing a partially written version. */
+export function writeFileAtomically(fs: FileSystem, path: string, content: string): void {
+  const temporary = `${path}.agentctl.tmp`;
+  fs.writeFileSync(temporary, content, { encoding: "utf8", flag: "wx" });
+  try {
+    fs.renameSync(temporary, path);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
+}

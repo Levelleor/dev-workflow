@@ -26,3 +26,9 @@ Archive completed plans or obsolete notes with traceable IDs; supersede ADRs rat
 ## Initial implementation status
 
 These are documented conventions. The CLI now allocates IDs for PRDs, ADRs, stories and inbox notes, validates references supplied during creation, and appends category-index links. Repository-wide link linting, generated reverse indexes, merge-conflict reconciliation and session context retrieval are **not yet implemented**. See [templates](../../templates/records/README.md).
+
+## Verification gates and task-local notes
+
+Executable verification gates live in `.agentctl/checks.yaml`, managed by `agentctl verify list|add` and run by `agentctl verify`. Adding a gate is a repository change subject to review. Gate failures are not acceptance receipts.
+
+Task-specific notes belong directly in the story's `## Notes` section, managed through `agentctl task [ID] notes`; they are automatically included in task context. The inbox remains for discoveries that need broader classification.

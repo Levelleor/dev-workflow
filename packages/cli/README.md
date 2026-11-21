@@ -17,12 +17,17 @@ agentctl knowledge capture "Research note" --source STORY-0001
 agentctl config show
 agentctl config get models.roles.worker.model
 agentctl config set models.roles.worker.thinking low
-agentctl verify --profile scaffold
+agentctl verify                          # run all registered gates
+agentctl verify list                     # list gates and commands
+agentctl verify scaffold                 # run only the scaffold gate
+agentctl verify add unit -- npm test     # register a new gate (no overwrites)
+agentctl verify add browser --timeout 600 -- npx playwright test
+agentctl verify --profile scaffold       # legacy named profile
 ```
 
 Commands operate on the project containing the current working directory. `init` works in a new or existing directory; it creates only missing files and never overwrites an existing `AGENTS.md`, document or configuration file.
 
-Record creation allocates stable IDs, validates required relationships and adds links to the relevant category index. Work items remain proposed until a later implementation of the workflow acceptance engine. `verify` executes configured local shell commands; it fails closed when a requested profile is missing or empty. It is **not yet an isolated, security-hardened verifier**, and it does not issue signed revision-bound acceptance receipts.
+Record creation allocates stable IDs, validates required relationships and adds links to the relevant category index. New stories begin pending. Verification executes registered shell commands but is **not yet an isolated, security-hardened acceptance verifier** and does not issue signed revision-bound receipts.
 
 ## Development
 
@@ -56,3 +61,26 @@ New stories start `pending`. Optional frontmatter includes `priority: 1` (highes
 The repository's task Markdown is Git tracked. The process-level `.agentctl/runtime/task.lock` is ignored by Git and protects concurrent claims **within one working tree**. It does not coordinate separate worktrees, machines, or stale locks after crashes. The first Ultracode integration must retain the single-writer constraint until shared coordination is implemented.
 
 Use `agentctl --help` for the complete command reference.
+
+
+## Verification gates
+
+Each gate is a named command in `.agentctl/checks.yaml`, independent of the project's language or test framework. The gate succeeds only with exit code 0. `agentctl verify` executes **all** registered gates, in name order, collecting failures rather than stopping at the first. `agentctl verify <name>` executes one gate; `agentctl verify list` lists them. Existing `--profile <name>` selections continue to work.
+
+Register a gate with `agentctl verify add <name> [--timeout SECONDS] -- <command> [args...]`. The `--` delimiter preserves command options. Existing gates cannot be overwritten by this command. Changes are Git-tracked and should be reviewed because registered shell commands run with the invoking user's privileges. There is no gate removal or modification command in this milestone.
+
+Use `--json` for machine-readable receipts containing exit codes, elapsed time, bounded stdout/stderr and timeout state. CLI exit code is 1 when any selected gate fails or configuration is invalid. No gates is an error for `verify`, not a pass.
+
+## Task notes
+
+```sh
+agentctl task notes add "Investigate timeout"             # current in-progress story
+agentctl task notes list
+agentctl task notes remove N001
+agentctl task STORY-0002 notes add "Investigate timeout"  # explicit story
+agentctl task STORY-0002 notes list --json
+```
+
+Notes live in the task Markdown under `## Notes` with IDs `N001`, `N002`, etc. IDs are never reused after deletion. They can be accessed on a particular task even when it is not in progress. Without a task ID, exactly one task must be in progress. Since notes are part of the task document, `task getcontext` includes them automatically.
+
+Task-specific notes are distinct from `knowledge capture`, which records wider discoveries in the knowledge inbox.
