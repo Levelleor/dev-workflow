@@ -1,32 +1,34 @@
 # dev-workflow
 
-A reusable, repository-backed development workflow for Pi coding agents, with **Ultracode selected as the initial orchestration engine**.
+A repository-backed, cost-conscious coding-agent harness for Pi, with **Ultracode selected for orchestration**.
 
-This is the **repository scaffold**, not a working autonomous development harness. The CLI, runtime adapters, test-policy enforcement and workflow automation are not yet implemented.
+The first functional component is **agentctl**, a TypeScript CLI for repository bootstrap, typed work and knowledge records, configuration inspection and local deterministic check profiles. Automated agent execution, review and integration remain future milestones.
 
-## What lives here
+## Monorepo
 
-- [`packages/`](packages/README.md): separately versionable TypeScript packages, including the future npm CLI.
-- [`agents/`](agents/README.md): portable role contracts for architect, worker, reviewer and knowledge curator.
-- [`workflows/`](workflows/README.md): intended feature lifecycle and Ultracode orchestration boundary.
-- [`templates/`](templates/README.md): files copied into other repositories during future `init`.
-- [`docs/`](docs/README.md): dev-workflow's own product requirements, architecture, decisions and task records.
-- [`.agentctl/`](.agentctl/README.md): this repository's own harness configuration.
+- [`packages/cli/`](packages/cli/README.md): npm package `@levelleor/agentctl` (binary: `agentctl`; private until publication).
+- [`packages/core/`](packages/core/README.md): planned shared contracts and policy.
+- [`packages/knowledge/`](packages/knowledge/README.md): planned storage adapter.
+- [`packages/verification/`](packages/verification/README.md): planned trusted verifier.
+- [`packages/runtime-ultracode/`](packages/runtime-ultracode/README.md): planned Ultracode adapter.
+- [`agents/`](agents/README.md): portable role contracts.
+- [`workflows/`](workflows/feature.md): intended sequential feature lifecycle.
+- [`templates/`](templates/README.md): portable repository and record templates.
+- [`docs/`](docs/README.md): dev-workflow's own versioned product knowledge.
+- [`.agentctl/`](.agentctl/README.md): this repository's self-hosted harness configuration.
 
-## Self-hosting
+## Development
 
-This project is also its first target repository. Its `AGENTS.md`, `.agentctl/` configuration, specifications and work items follow the same conventions that the eventual CLI will install elsewhere. At present they are reference artifacts, not automated controls.
+```sh
+npm install
+npm run check
+node packages/cli/dist/index.js --help
+```
 
-## Ground rules
+See [CLI usage](packages/cli/README.md) and [agent entry point](AGENTS.md). GitHub Actions runs TypeScript type checking, build, Vitest unit tests, existing scaffold tests and a CLI packaging smoke check.
 
-- Keep requirements, architectural decisions and planned work in Git; resolve branch conflicts during integration.
-- Use **one worker at a time for the first POC**. Design interfaces to permit parallel worktrees and serial integration later.
-- Execution logs, credentials and temporary state must not be committed.
-- A worker's completion claim is not verification. CI and an eventual trusted verification runner provide acceptance evidence.
-- Ultracode is the chosen POC orchestrator; do not build a second independent orchestration loop without a recorded decision.
+## Boundaries
 
-## Start here
+Knowledge and work descriptions are versioned in Git. No implementation agent can mark work verified by changing a document status. There is no active autonomous feature loop yet.
 
-Read [`AGENTS.md`](AGENTS.md), then [`docs/product/PRD-0001.md`](docs/product/PRD-0001.md) and [`docs/architecture/overview.md`](docs/architecture/overview.md).
-
-For now, `npm test` checks the repository scaffold using Node's built-in test runner. It does **not** test an agent workflow.
+The first POC uses one writer and serial integration; concurrency is a later design goal. Secrets, execution state and generated artifacts are not committed.

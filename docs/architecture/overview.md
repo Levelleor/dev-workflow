@@ -2,7 +2,8 @@
 
 ## Ownership boundaries
 
-- **CLI and core packages:** future developer interface and portable policies, published separately.
+- **CLI:** implemented repository setup, knowledge records, config and local verification commands; not published.
+- **Core package:** future portable agent policy and lifecycle contracts.
 - **Ultracode runtime adapter:** selected POC orchestration; must not share sequencing authority with a second scheduler.
 - **Knowledge adapter:** Git-backed source-coupled requirements, ADRs, plans and work definitions.
 - **Verification adapter:** trusted check definitions and evidence tied to the tested revision.

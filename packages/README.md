@@ -1,6 +1,6 @@
 # Workspace packages
 
-The root uses **npm workspaces**. All packages remain private during this scaffolding phase; no npm publication or executable CLI is implied.
+The root uses **npm workspaces**. The `@levelleor/agentctl` CLI builds and runs, but packages remain private until npm publication is approved. Other workspace packages remain architectural placeholders.
 
 | Directory | Intended responsibility |
 | --- | --- |
