@@ -12,7 +12,7 @@ export function fixture() {
     "schemaVersion: 1", "project:", "  id: REPLACE_WITH_PROJECT_ID",
     "orchestration:", "  engine: ultracode", "  mode: sequential", "",
   ].join("\n"));
-  mem.writeFileSync("/templates/.agentctl/models.yaml", "roles:\\n  worker:\\n    model: deepseek/flash\\n");
+  mem.writeFileSync("/templates/.agentctl/models.yaml", ["roles:", "  worker:", "    model: deepseek/flash", ""].join("\n"));
   mem.writeFileSync("/templates/.agentctl/checks.yaml", [
     "schemaVersion: 1", "checks:", "  scaffold:",
     "    command: npm test", "    timeoutSeconds: 5", "profiles:",
