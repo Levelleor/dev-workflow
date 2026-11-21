@@ -1,10 +1,20 @@
 {
-  "name": "@levelleor/dev-workflow",
-  "version": "0.0.0",
+  "name": "@levelleor/agentctl",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "CLI for the dev-workflow coding-agent harness (not yet implemented)",
+  "description": "Repository-backed coding-agent harness CLI",
+  "bin": { "agentctl": "./dist/index.js" },
   "engines": { "node": ">=22" },
   "files": ["dist", "README.md"],
-  "publishConfig": { "access": "public" }
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-templates.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "smoke": "node dist/index.js --help && node dist/index.js --version"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  }
 }

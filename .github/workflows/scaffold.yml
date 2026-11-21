@@ -1,4 +1,4 @@
-name: Scaffold checks
+name: CI
 
 on:
   push:
@@ -9,11 +9,26 @@ permissions:
   contents: read
 
 jobs:
-  scaffold:
+  test:
+    name: TypeScript, Vitest and package smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm test
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck, build, test and smoke test
+        run: npm run check
+      - name: Check npm package contents
+        run: |
+          npm pack --workspace @levelleor/agentctl --dry-run --json > pack.json
+          node -e 'const p=require("./pack.json")[0]; const paths=p.files.map(f=>f.path); if (!paths.includes("dist/index.js") || !paths.includes("dist/templates/repository/AGENTS.md")) process.exit(1);'
+      - name: Save dependency lockfile for reproducible installs
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-lockfile
+          path: package-lock.json
+          if-no-files-found: error

@@ -1,0 +1,19 @@
+# Default model policy. Validate names and effort levels with your Pi provider.
+schemaVersion: 1
+roles:
+  architect:
+    model: openai/gpt-6.2-sol
+    thinking: high
+  worker:
+    model: deepseek/deepseek-flash
+    thinking: medium
+  reviewer:
+    model: deepseek/deepseek-flash
+    thinking: medium
+limits:
+  worker:
+    maxTurns: 50
+    maxToolCalls: 150
+    timeoutSeconds: 900
+  repairRetries: 2
+  reviewRetries: 1
