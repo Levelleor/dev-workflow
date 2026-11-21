@@ -4,10 +4,19 @@
   "private": true,
   "type": "module",
   "description": "Repository-backed coding-agent harness CLI",
-  "bin": { "agentctl": "./dist/index.js" },
-  "engines": { "node": ">=22" },
-  "files": ["dist", "README.md"],
-  "publishConfig": { "access": "public" },
+  "bin": {
+    "agentctl": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-templates.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",

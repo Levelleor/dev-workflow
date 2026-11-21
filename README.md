@@ -19,6 +19,8 @@ The first functional component is **agentctl**, a TypeScript CLI for repository 
 
 ## Development
 
+Node.js 24 or newer is required (see `.nvmrc`). CI runs on Node 24 and caches npm package downloads.
+
 ```sh
 npm install
 npm run check
