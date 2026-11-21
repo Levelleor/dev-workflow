@@ -37,3 +37,20 @@ node packages/cli/dist/index.js --help
 Unit tests use Vitest and memfs, injected into the CLI's filesystem interface; no real repositories or cloud services are touched.
 
 The production CLI is built with TypeScript and includes its repository templates in `dist/templates/`. See [architecture](../../docs/architecture/overview.md).
+
+## Sequential task workflow
+
+```sh
+agentctl task claim next                 # claim and output a complete prompt
+agentctl task getcontext                 # rehydrate the in-progress task context
+agentctl task complete                   # mark implemented, not accepted
+agentctl task claim next --json          # structured context or diagnostic (exit code 2)
+```
+
+New stories start `pending`. Optional frontmatter includes `priority: 1` (highest) to `5` (lowest), `depends_on: [STORY-0001]`, and `blocked: true`. Claimed tasks become `in-progress`; `complete` changes the status to `implemented`. Proposed stories are not claimable. Dependencies count as resolved when implemented/completed/accepted.
+
+`.agentctl/project.yaml` defines `context.include` for common project documents and `context.reference` for optional paths. The complete prompt embeds the story, parent PRD, relevant accepted decisions and active task plan where present. Missing essential context prevents claiming.
+
+The repository's task Markdown is Git tracked. The process-level `.agentctl/runtime/task.lock` is ignored by Git and protects concurrent claims **within one working tree**. It does not coordinate separate worktrees, machines, or stale locks after crashes. The first Ultracode integration must retain the single-writer constraint until shared coordination is implemented.
+
+Use `agentctl --help` for the complete command reference.

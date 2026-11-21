@@ -19,7 +19,7 @@ Do not invent a new top-level taxonomy for one document. If genuinely necessary,
 
 ## Lifecycle
 
-Proposed → approved/ready → completed or superseded (depending on type). Work completion is distinct from external verification and integration; workers cannot mark themselves accepted.
+Stories: `pending` → `in-progress` → `implemented`; a subsequent verification/integration gate may mark them `accepted`. Proposed stories are not claimable. In the sequential POC, implemented/completed/accepted dependencies count as resolved. Knowledge records retain their own proposed/accepted/superseded lifecycle. Implementation is not acceptance.
 
 Archive completed plans or obsolete notes with traceable IDs; supersede ADRs rather than erasing rationale. Avoid duplicative documents that merely restate existing canonical records.
 

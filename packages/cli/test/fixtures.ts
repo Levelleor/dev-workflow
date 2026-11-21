@@ -8,8 +8,12 @@ export function fixture() {
   mem.mkdirSync("/repo", { recursive: true });
   mem.mkdirSync("/templates/.agentctl", { recursive: true });
   mem.writeFileSync("/templates/AGENTS.md", "# Project agents\n");
+  mem.mkdirSync("/templates/docs", { recursive: true });
+  mem.writeFileSync("/templates/docs/project.md", "# Project goals\n");
+  mem.writeFileSync("/templates/docs/conventions.md", "# Conventions\n");
   mem.writeFileSync("/templates/.agentctl/project.yaml", [
     "schemaVersion: 1", "project:", "  id: REPLACE_WITH_PROJECT_ID",
+    "context:", "  include: [AGENTS.md, docs/project.md, docs/conventions.md]", "  reference: [docs/product/README.md]",
     "orchestration:", "  engine: ultracode", "  mode: sequential", "",
   ].join("\n"));
   mem.writeFileSync("/templates/.agentctl/models.yaml", ["roles:", "  worker:", "    model: deepseek/flash", ""].join("\n"));
