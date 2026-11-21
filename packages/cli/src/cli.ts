@@ -48,6 +48,7 @@ function argumentsOf(argv: string[]): { args: string[]; flags: Record<string, Fl
     const [name, inline] = token.slice(2).split("=", 2);
     if (!/^[a-z][\w-]*$/.test(name)) throw new Error(`Invalid option: ${token}`);
     if (inline !== undefined) flags[name] = inline;
+    else if (["json", "help", "version"].includes(name)) flags[name] = true;
     else if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) flags[name] = argv[++i];
     else flags[name] = true;
   }
@@ -78,8 +79,8 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     const json = flags.json === true;
     const emit = (value: unknown) => output(json ? JSON.stringify(value, null, 2) : typeof value === "string" ? value : JSON.stringify(value, null, 2));
 
+    if (command === "version" || flags.version === true) { output("agentctl 0.1.0"); return 0; }
     if (!command || command === "help" || flags.help === true) { output(help); return 0; }
-    if (command === "version" || command === "--version") { output("agentctl 0.1.0"); return 0; }
 
     if (command === "init") {
       emit(initProject(fs, action ? join(cwd, action) : cwd, templates));
