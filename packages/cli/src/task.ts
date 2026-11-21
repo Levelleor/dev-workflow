@@ -47,6 +47,16 @@ function priority(task: RecordEntry): number {
 
 export function selectNextTask(fs: FileSystem, root: string): TaskSelection {
   const stories = listRecords(fs, root, "story");
+  const ids = new Set<string>();
+  for (const task of stories) {
+    if (ids.has(task.id)) {
+      return {
+        ok: false, code: "DUPLICATE_TASK_ID",
+        message: `Multiple task records have ID ${task.id}. Resolve the duplicate before claiming.`, blocked: [],
+      };
+    }
+    ids.add(task.id);
+  }
   const active = stories.filter((task) => task.status === "in-progress");
   if (active.length) {
     return {
@@ -79,6 +89,43 @@ export function selectNextTask(fs: FileSystem, root: string): TaskSelection {
   }
   ready.sort((a, b) => priority(a) - priority(b) || a.id.localeCompare(b.id));
   return { ok: true, task: ready[0] };
+}
+
+/** An explicit claim bypasses queue priority, never eligibility or ownership rules. */
+export function selectTaskById(fs: FileSystem, root: string, id: string): TaskSelection {
+  if (!/^STORY-\d{4,}$/.test(id)) {
+    return { ok: false, code: "INVALID_TASK_ID", message: `Expected a stable task ID such as STORY-0001, got '${id}'.`, blocked: [] };
+  }
+  const stories = listRecords(fs, root, "story");
+  const active = stories.filter((task) => task.status === "in-progress");
+  if (active.length) {
+    return {
+      ok: false, code: "TASK_IN_PROGRESS",
+      message: `${active.map((task) => task.id).join(", ")} already in progress. Use 'agentctl task getcontext' or 'agentctl task complete'.`,
+      blocked: [],
+    };
+  }
+  const matches = stories.filter((task) => task.id === id);
+  if (matches.length > 1) {
+    return { ok: false, code: "DUPLICATE_TASK_ID", message: `Multiple task records have ID ${id}. Resolve the duplicate before claiming.`, blocked: [] };
+  }
+  const task = matches[0];
+  if (!task) {
+    return { ok: false, code: "UNKNOWN_TASK", message: `No task with ID ${id} exists.`, blocked: [] };
+  }
+  if (!available.has(task.status)) {
+    return {
+      ok: false, code: "TASK_NOT_READY",
+      message: `${id} has status '${task.status}', not pending or ready.`,
+      blocked: [],
+    };
+  }
+  const all = new Map(listRecords(fs, root).map((record) => [record.id, record]));
+  const reasons = blockers(task, all);
+  if (reasons.length) {
+    return { ok: false, code: "TASK_BLOCKED", message: `${id} has unresolved blockers.`, blocked: [{ id, reasons }] };
+  }
+  return { ok: true, task };
 }
 
 function withTaskLock<T>(fs: FileSystem, root: string, action: () => T): T {
@@ -127,15 +174,19 @@ export type ClaimResult =
   | { ok: true; context: TaskContext }
   | Extract<TaskSelection, { ok: false }>;
 
-export function claimNextTask(fs: FileSystem, root: string): ClaimResult {
+export function claimTask(fs: FileSystem, root: string, id: string): ClaimResult {
   return withTaskLock(fs, root, () => {
-    const choice = selectNextTask(fs, root);
+    const choice = id === "next" ? selectNextTask(fs, root) : selectTaskById(fs, root, id);
     if (!choice.ok) return choice;
     // Assemble before mutating; a missing required document must not leave a claimed task.
     buildTaskContext(fs, root, choice.task);
     changeStatus(fs, choice.task, "in-progress");
     return { ok: true, context: buildTaskContext(fs, root, { ...choice.task, status: "in-progress" }) };
   });
+}
+
+export function claimNextTask(fs: FileSystem, root: string): ClaimResult {
+  return claimTask(fs, root, "next");
 }
 
 export function getActiveTaskContext(fs: FileSystem, root: string, id?: string): TaskContext {

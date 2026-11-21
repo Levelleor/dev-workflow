@@ -41,11 +41,13 @@ The production CLI is built with TypeScript and includes its repository template
 ## Sequential task workflow
 
 ```sh
-agentctl task claim next                 # claim and output a complete prompt
-agentctl task getcontext                 # rehydrate the in-progress task context
-agentctl task complete                   # mark implemented, not accepted
-agentctl task claim next --json          # structured context or diagnostic (exit code 2)
+agentctl task claim next                 # select by priority, claim and output context
+agentctl task claim STORY-0001 --json    # explicitly claim a task by stable ID
+agentctl task getcontext STORY-0001      # rehydrate context for that in-progress task
+agentctl task complete STORY-0001        # mark that task implemented, not accepted
 ```
+
+Task IDs are canonical identifiers such as `STORY-0001`, not file names. All task commands use the same positional ID format; `getcontext` and `complete` may omit the ID when exactly one task is active. `claim next` selects by priority, while `claim STORY-0001` deliberately chooses that specific task and still enforces dependencies, status and single-task ownership.
 
 New stories start `pending`. Optional frontmatter includes `priority: 1` (highest) to `5` (lowest), `depends_on: [STORY-0001]`, and `blocked: true`. Claimed tasks become `in-progress`; `complete` changes the status to `implemented`. Proposed stories are not claimable. Dependencies count as resolved when implemented/completed/accepted.
 

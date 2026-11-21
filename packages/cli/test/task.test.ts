@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fixture } from "./fixtures.js";
 import { addRecord, findRecord } from "../src/records.js";
-import { claimNextTask, completeTask, getActiveTaskContext, selectNextTask } from "../src/task.js";
+import { claimNextTask, claimTask, completeTask, getActiveTaskContext, selectNextTask, selectTaskById } from "../src/task.js";
 
 function setup() {
   const { fs, initialize } = fixture();
@@ -137,5 +137,65 @@ describe("deterministic task claiming", () => {
     fs.writeFileSync("/repo/.agentctl/project.yaml", "project:\n  id: repo\ncontext:\n  include: [../outside.md]\n");
     expect(() => claimNextTask(fs, "/repo")).toThrow(/remain inside the project/);
     expect(findRecord(fs, "/repo", story.id).status).toBe("pending");
+  });
+});
+
+describe("explicit task ID claiming", () => {
+  it("claims the requested stable ID instead of following queue priority", () => {
+    const { fs, prd } = setup();
+    const first = addRecord(fs, "/repo", { type: "story", title: "High priority", parent: prd.id });
+    modify(fs, first.file, "priority: 3", "priority: 1");
+    const second = addRecord(fs, "/repo", { type: "story", title: "Requested task", parent: prd.id });
+    expect(selectNextTask(fs, "/repo")).toMatchObject({ ok: true, task: { id: first.id } });
+    expect(selectTaskById(fs, "/repo", second.id)).toMatchObject({ ok: true, task: { id: second.id } });
+    const claimed = claimTask(fs, "/repo", second.id);
+    expect(claimed.ok && claimed.context.task.id).toBe(second.id);
+    expect(findRecord(fs, "/repo", second.id).status).toBe("in-progress");
+    expect(findRecord(fs, "/repo", first.id).status).toBe("pending");
+    expect(getActiveTaskContext(fs, "/repo", second.id).task.id).toBe(second.id);
+    expect(completeTask(fs, "/repo", second.id).status).toBe("implemented");
+    expect(claimNextTask(fs, "/repo")).toMatchObject({ ok: true, context: { task: { id: first.id } } });
+  });
+
+  it("returns structured reasons for invalid, unknown and unavailable IDs", () => {
+    const { fs, prd } = setup();
+    const story = addRecord(fs, "/repo", { type: "story", title: "Draft", parent: prd.id });
+    expect(claimTask(fs, "/repo", "story-0001")).toMatchObject({ ok: false, code: "INVALID_TASK_ID" });
+    expect(claimTask(fs, "/repo", "STORY-9999")).toMatchObject({ ok: false, code: "UNKNOWN_TASK" });
+    modify(fs, story.file, "status: pending", "status: proposed");
+    expect(claimTask(fs, "/repo", story.id)).toMatchObject({ ok: false, code: "TASK_NOT_READY" });
+    expect(findRecord(fs, "/repo", story.id).status).toBe("proposed");
+  });
+
+  it("never allows explicit claims to bypass prerequisites or active ownership", () => {
+    const { fs, prd } = setup();
+    const first = addRecord(fs, "/repo", { type: "story", title: "First", parent: prd.id });
+    const second = addRecord(fs, "/repo", { type: "story", title: "Dependent", parent: prd.id });
+    modify(fs, second.file, "depends_on: []", `depends_on: [${first.id}]`);
+    const blocked = claimTask(fs, "/repo", second.id);
+    expect(blocked).toMatchObject({ ok: false, code: "TASK_BLOCKED" });
+    if (blocked.ok) throw new Error("Expected a blocked task");
+    expect(blocked.blocked[0]).toMatchObject({ id: second.id });
+    expect(blocked.blocked[0].reasons[0]).toContain(first.id);
+    expect(findRecord(fs, "/repo", second.id).status).toBe("pending");
+    expect(claimTask(fs, "/repo", first.id).ok).toBe(true);
+    expect(claimTask(fs, "/repo", second.id)).toMatchObject({ ok: false, code: "TASK_IN_PROGRESS" });
+  });
+
+  it("rejects duplicate task identifiers instead of silently choosing a file", () => {
+    const { fs, prd } = setup();
+    const story = addRecord(fs, "/repo", { type: "story", title: "Original", parent: prd.id });
+    fs.writeFileSync("/repo/docs/work/items/STORY-9999-duplicate.md", fs.readFileSync(story.file, "utf8"));
+    expect(claimTask(fs, "/repo", story.id)).toMatchObject({ ok: false, code: "DUPLICATE_TASK_ID" });
+    expect(findRecord(fs, "/repo", story.id).status).toBe("pending");
+  });
+
+  it("keeps an explicit claim pending when context validation fails", () => {
+    const { fs, prd } = setup();
+    const story = addRecord(fs, "/repo", { type: "story", title: "Incomplete context", parent: prd.id });
+    fs.writeFileSync("/repo/.agentctl/project.yaml", "project:\n  id: repo\ncontext:\n  include: [docs/missing.md]\n");
+    expect(() => claimTask(fs, "/repo", story.id)).toThrow(/Required context document is missing/);
+    expect(findRecord(fs, "/repo", story.id).status).toBe("pending");
+    expect(fs.existsSync("/repo/.agentctl/runtime/task.lock")).toBe(false);
   });
 });
