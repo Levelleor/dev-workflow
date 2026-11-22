@@ -4,7 +4,7 @@ import { runCli } from "../src/cli.js";
 import { addRecord } from "../src/records.js";
 
 describe("task CLI", () => {
-  it("prints a complete context prompt and follows the sequential lifecycle", () => {
+  it("prints compact claim metadata and gets the full context in a separate command", () => {
     const { fs, initialize } = fixture();
     initialize();
     const prd = addRecord(fs, "/repo", { type: "prd", title: "Product" });
@@ -15,6 +15,9 @@ describe("task CLI", () => {
       fs, cwd: "/repo", output: (text) => output.push(text), error: (text) => errors.push(text),
     });
     expect(cli(["task", "claim", "next"])).toBe(0);
+    expect(output.at(-1)).toContain("Claimed STORY-0001");
+    expect(output.at(-1)).not.toContain("Project context (included)");
+    expect(cli(["task", "getcontext"])).toBe(0);
     expect(output.at(-1)).toContain("Project context (included)");
     expect(output.at(-1)).toContain("Create feature");
     expect(cli(["task", "claim", "next", "--json"])).toBe(2);
@@ -49,7 +52,9 @@ describe("explicit ID CLI consistency", () => {
       fs, cwd: "/repo", output: (value) => output.push(value), error: (value) => errors.push(value),
     });
     expect(run(["task", "claim", task.id, "--json"])).toBe(0);
-    expect(JSON.parse(output.at(-1)!).context.task.id).toBe(task.id);
+    expect(JSON.parse(output.at(-1)!)).toEqual({
+      ok: true, task: { id: task.id, title: "Chosen task", status: "in-progress" },
+    });
     expect(run(["task", "getcontext", task.id, "--json"])).toBe(0);
     expect(JSON.parse(output.at(-1)!).task.status).toBe("in-progress");
     expect(run(["task", "complete", task.id, "--json"])).toBe(0);

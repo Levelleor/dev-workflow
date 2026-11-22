@@ -24,7 +24,7 @@ Usage:
   agentctl init [directory]                         Safely install project files
   agentctl doctor                                   Inspect project setup
   agentctl status [--json]                          Show project and task counts
-  agentctl task claim <ID|next> [--json]            Claim a specific or next eligible task, with context
+  agentctl task claim <ID|next> [--json]            Claim a task, returning its ID and status
   Example: agentctl task claim next                  Select automatically by priority
   agentctl task getcontext [ID] [--json]            Resume an in-progress task
   agentctl task complete [ID] [--json]              Mark an in-progress task implemented
@@ -170,7 +170,7 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
           emit(json ? result : [result.message, ...result.blocked.map((task) => `${task.id}: ${task.reasons.join("; ")}`)].join("\n"));
           return 2;
         }
-        emit(json ? result : result.context.prompt);
+        emit(json ? result : `Claimed ${result.task.id}: ${result.task.title} (in-progress). Run 'agentctl task getcontext ${result.task.id}' for context.`);
         return 0;
       }
       if (action === "getcontext") {

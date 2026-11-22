@@ -53,9 +53,15 @@ if (claim.exitCode !== 0) {
   log("No claim: " + JSON.stringify(claim.value));
   return { status: "unavailable", reason: claim.value };
 }
-const task = claim.value.context.task;
-const assignment = claim.value.context.prompt;
-const id = task.id;
+const id = claim.value.task.id;
+// Claim and context retrieval are separate deterministic host operations.
+const contextResult = await hostCall("agentctl.read", { op: "context", id });
+if (contextResult.exitCode !== 0 || !contextResult.value ||
+    !contextResult.value.task || contextResult.value.task.id !== id ||
+    typeof contextResult.value.prompt !== "string") {
+  throw new Error("Failed to load context for claimed story " + id);
+}
+const assignment = contextResult.value.prompt;
 const originalGatesResult = await hostCall("agentctl.read", { op: "gates" });
 const originalGates = originalGatesResult.value;
 

@@ -8,8 +8,8 @@ status: implemented
 
 Run `agentctl-sequential-feature` from Pi's `workflow` tool. The matching script is installed at `.pi/ultracode/workflows/agentctl-sequential-feature.workflow.js`. A trusted host extension `pi-ultracode-agentctl-bridge` supplies exactly three scoped capabilities.
 
-1. Claim the highest priority eligible story, or a supplied ID, **deterministically** through `agentctl.write`. No agent arbitrates eligibility.
-2. Cheap lookup subagent summarizes supplied context without modifying files. A fresh cheap implementation subagent receives the complete claimed task prompt plus lookup notes.
+1. Claim the highest priority eligible story, or a supplied ID, **deterministically** through `agentctl.write`. The response contains only task metadata; no agent arbitrates eligibility.
+2. Call `agentctl.read` with `op: "context"` and the claimed task ID to retrieve the complete assignment. Then a cheap lookup subagent summarizes that context without modifying files. A fresh cheap implementation subagent receives the full task prompt plus lookup notes.
 3. Implementation agent writes code and tests, registers additional quality gates if necessary, and returns. It **never** marks the task implemented.
 4. The workflow calls `agentctl.verify` to run **all gates deterministically**. On failure, provide receipts to a cheap repair agent **once**, then escalate to the stronger model for **one** attempt. If that fails, stop with full diagnostics.
 5. After passing gates, a fresh **read-only** review subagent checks functional criteria, regressions, code quality, edge cases and security.
