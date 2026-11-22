@@ -160,6 +160,7 @@ test("real Ultracode workflow claims through CLI, verifies, reviews and complete
 test("Pi workflow uses exactly one cheap retry then the stronger model", async () => {
   await project(async (cwd) => {
     fs.writeFileSync(path.join(cwd, ".agentctl/checks.yaml"), [
+      "checks:", "  dynamic:",
       "    command: " + JSON.stringify(`node -e "process.exit(require('fs').existsSync('passed.flag') ? 0 : 1)"`),
       "    timeoutSeconds: 10", "profiles:", "  scaffold: [dynamic]", "",
     ].join("\n"));
