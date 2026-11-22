@@ -91,7 +91,7 @@ export function allowedArguments(kind: "read" | "write" | "verify", input: unkno
     return ["task", ...optionalId(data.id), "notes", "list", "--json"];
   }
   if (op === "claim") {
-    return ["task", "claim", data.id === undefined ? "next" : id(data.id), "--json"];
+    return ["task", "claim", data.id === undefined || data.id === "next" ? "next" : id(data.id), "--json"];
   }
   if (op === "complete") return ["task", "complete", id(data.id), "--json"];
   if (op === "note-add") {
