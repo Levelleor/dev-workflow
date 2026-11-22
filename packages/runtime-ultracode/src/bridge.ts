@@ -105,12 +105,12 @@ export const execAgentctl: Executor = (args, cwd, signal, timeoutMs) => new Prom
     cwd, signal, timeout: timeoutMs, shell: false, windowsHide: true,
     maxBuffer: MAX_OUTPUT, encoding: "utf8",
   }, (error, stdout, stderr) => {
-    if (error && typeof (error as NodeJS.ErrnoException).code !== "number") {
+    const code: unknown = error ? error.code : 0;
+    if (error && typeof code !== "number") {
       fail(new Error("agentctl execution failed: " + error.message));
       return;
     }
-    const exitCode = error && typeof (error as NodeJS.ErrnoException).code === "number"
-      ? (error as NodeJS.ErrnoException).code as number : 0;
+    const exitCode = typeof code === "number" ? code : 0;
     done({ exitCode, stdout, stderr });
   });
 });
