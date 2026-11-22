@@ -18,7 +18,7 @@ export function fixture() {
   ].join("\n"));
   mem.writeFileSync("/templates/.agentctl/models.yaml", [
     "schemaVersion: 1", "roles:", "  worker:", "    model: deepseek/flash",
-    "    thinking: medium", "repairRetries: 2", "reviewRetries: 2", "",
+    "    thinking: medium", "repairRetries: 2", "escalationThreshold: 2", "reviewRetries: 2", "",
   ].join("\n"));
   mem.writeFileSync("/templates/.agentctl/checks.yaml", [
     "schemaVersion: 1", "checks:", "  scaffold:",

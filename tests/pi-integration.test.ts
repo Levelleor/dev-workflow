@@ -256,7 +256,7 @@ test("repairRetries zero permits only the initial implementation attempt", async
       "    command: node -e 'process.exit(1)'",
       "    timeoutSeconds: 10", "profiles:", "  scaffold: [fail]", "",
     ].join("\n"));
-    modelConfig(cwd, "repairRetries: 2", "repairRetries: 0");
+    modelConfig(cwd, "repairRetries: 2\nescalationThreshold: 2", "repairRetries: 0\nescalationThreshold: 0");
     const { result, calls } = await execute(cwd);
     assert.equal(result.status, "escalated");
     assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label), [
@@ -272,7 +272,7 @@ test("repairRetries one escalates the only retry to the stronger model", async (
       "    command: " + JSON.stringify(`node -e "process.exit(require('fs').existsSync('passed.flag') ? 0 : 1)"`),
       "    timeoutSeconds: 10", "profiles:", "  scaffold: [dynamic]", "",
     ].join("\n"));
-    modelConfig(cwd, "repairRetries: 2", "repairRetries: 1");
+    modelConfig(cwd, "repairRetries: 2\nescalationThreshold: 2", "repairRetries: 1\nescalationThreshold: 1");
     const { result, calls } = await execute(cwd, { repairAt: 2 });
     assert.equal(result.status, "implemented");
     assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label), [
@@ -299,4 +299,61 @@ test("reviewRetries one permits a second round after a rejection", async () => {
     assert.equal(result.reviewRounds, 2);
     assert.equal(calls.filter((call) => call.label === "independent review").length, 2);
   });
+});
+
+test("escalationThreshold one switches to the stronger model on the first repair", async () => {
+  await project(async (cwd) => {
+    fs.writeFileSync(path.join(cwd, ".agentctl/checks.yaml"), [
+      "checks:", "  dynamic:",
+      "    command: " + JSON.stringify(`node -e "process.exit(require('fs').existsSync('passed.flag') ? 0 : 1)"`),
+      "    timeoutSeconds: 10", "profiles:", "  scaffold: [dynamic]", "",
+    ].join("\n"));
+    modelConfig(cwd, "escalationThreshold: 2", "escalationThreshold: 1");
+    const { result, calls } = await execute(cwd, { repairAt: 2 });
+    assert.equal(result.status, "implemented");
+    const implementations = calls.filter((call) => /implementation|repair/.test(call.label));
+    assert.deepEqual(implementations.map((call) => call.label), ["cheap implementation", "strong implementation"]);
+    assert.ok(implementations[1].modelPattern?.includes("gpt"));
+  });
+});
+
+test("escalationThreshold keeps later retries on the stronger model", async () => {
+  await project(async (cwd) => {
+    fs.writeFileSync(path.join(cwd, ".agentctl/checks.yaml"), [
+      "checks:", "  dynamic:",
+      "    command: " + JSON.stringify(`node -e "process.exit(require('fs').existsSync('passed.flag') ? 0 : 1)"`),
+      "    timeoutSeconds: 10", "profiles:", "  scaffold: [dynamic]", "",
+    ].join("\n"));
+    modelConfig(cwd, "repairRetries: 2", "repairRetries: 3");
+    modelConfig(cwd, "escalationThreshold: 2", "escalationThreshold: 1");
+    const { result, calls } = await execute(cwd, { repairAt: 4 });
+    assert.equal(result.status, "implemented");
+    assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label),
+      ["cheap implementation", "strong implementation", "strong implementation", "strong implementation"]);
+  });
+});
+
+test("omitting escalationThreshold preserves last-retry escalation", async () => {
+  await project(async (cwd) => {
+    fs.writeFileSync(path.join(cwd, ".agentctl/checks.yaml"), [
+      "checks:", "  dynamic:",
+      "    command: " + JSON.stringify(`node -e "process.exit(require('fs').existsSync('passed.flag') ? 0 : 1)"`),
+      "    timeoutSeconds: 10", "profiles:", "  scaffold: [dynamic]", "",
+    ].join("\n"));
+    modelConfig(cwd, "escalationThreshold: 2\n", "");
+    const { result, calls } = await execute(cwd, { repairAt: 3 });
+    assert.equal(result.status, "implemented");
+    assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label),
+      ["cheap implementation", "cheap repair", "strong implementation"]);
+  });
+});
+
+test("rejects thresholds outside the configured repair budget", async () => {
+  for (const threshold of ["0", "3", "-1", "1.5", "invalid"]) {
+    await project(async (cwd) => {
+      modelConfig(cwd, "escalationThreshold: 2", "escalationThreshold: " + threshold);
+      await assert.rejects(execute(cwd), /escalationThreshold/);
+      assert.equal(cli(cwd, ["work", "list", "--json"]).includes('"in-progress"'), false);
+    });
+  }
 });

@@ -51,6 +51,7 @@ describe("CLI interface", () => {
     const config = JSON.parse(output[0]);
     expect(config.models.roles.worker).toEqual({ model: "deepseek/flash", thinking: "medium" });
     expect(config.models.repairRetries).toBe(2);
+    expect(config.models.escalationThreshold).toBe(2);
     expect(config.models.reviewRetries).toBe(2);
     expect(config.models).not.toHaveProperty("limits");
   });
