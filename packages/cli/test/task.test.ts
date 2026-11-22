@@ -17,7 +17,7 @@ function modify(fs: ReturnType<typeof setup>["fs"], file: string, from: string, 
 }
 
 describe("deterministic task claiming", () => {
-  it("prioritises ready tasks, keeps one active and returns full context", () => {
+  it("prioritises ready tasks, returns only metadata, and loads context separately", () => {
     const { fs, prd } = setup();
     const lower = addRecord(fs, "/repo", { type: "story", title: "Second task", parent: prd.id });
     const higher = addRecord(fs, "/repo", { type: "story", title: "First task", parent: prd.id });
@@ -25,11 +25,13 @@ describe("deterministic task claiming", () => {
     const result = claimNextTask(fs, "/repo");
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("Claim rejected");
-    expect(result.context.task.id).toBe(higher.id);
-    expect(result.context.prompt).toContain("Project agents");
-    expect(result.context.prompt).toContain("npm test");
-    expect(result.context.prompt).toContain("Deliver useful software");
-    expect(result.context.prompt).toContain("First task");
+    expect(result).toEqual({ ok: true, task: { id: higher.id, title: "First task", status: "in-progress" } });
+    const context = getActiveTaskContext(fs, "/repo", higher.id);
+    expect(context.task.id).toBe(higher.id);
+    expect(context.prompt).toContain("Project agents");
+    expect(context.prompt).toContain("npm test");
+    expect(context.prompt).toContain("Deliver useful software");
+    expect(context.prompt).toContain("First task");
     expect(findRecord(fs, "/repo", higher.id).status).toBe("in-progress");
     expect(fs.existsSync(`${higher.file}.agentctl.tmp`)).toBe(false);
     expect(selectNextTask(fs, "/repo")).toMatchObject({ ok: false, code: "TASK_IN_PROGRESS" });
@@ -39,7 +41,7 @@ describe("deterministic task claiming", () => {
     expect(findRecord(fs, "/repo", higher.id).status).toBe("implemented");
     expect(() => completeTask(fs, "/repo")).toThrow(/No task is in progress/);
     const next = claimNextTask(fs, "/repo");
-    expect(next.ok && next.context.task.id).toBe(lower.id);
+    expect(next.ok && next.task.id).toBe(lower.id);
   });
 
   it("sorts ties by stable ID rather than filenames", () => {
@@ -57,9 +59,9 @@ describe("deterministic task claiming", () => {
     modify(fs, next.file, "depends_on: []", `depends_on: [${dep.id}]`);
     modify(fs, dep.file, "status: pending", "status: implemented");
     const claimed = claimNextTask(fs, "/repo");
-    expect(claimed.ok && claimed.context.task.id).toBe(next.id);
+    expect(claimed.ok && claimed.task.id).toBe(next.id);
     if (!claimed.ok) throw new Error("Expected a claim");
-    expect(claimed.context.references.some((r) => r.includes(dep.id))).toBe(true);
+    expect(getActiveTaskContext(fs, "/repo", next.id).references.some((r) => r.includes(dep.id))).toBe(true);
   });
 
   it("explains an entirely blocked queue", () => {
@@ -93,12 +95,15 @@ describe("deterministic task claiming", () => {
     expect(fs.existsSync(dir)).toBe(false);
   });
 
-  it("never changes state when essential context cannot be assembled", () => {
+  it("claims independently of missing context; getcontext reports the missing document", () => {
     const { fs, prd } = setup();
     const story = addRecord(fs, "/repo", { type: "story", title: "Requires context", parent: prd.id });
     fs.writeFileSync("/repo/.agentctl/project.yaml", "project:\n  id: repo\ncontext:\n  include: [docs/missing.md]\n");
-    expect(() => claimNextTask(fs, "/repo")).toThrow(/Required context document is missing/);
-    expect(findRecord(fs, "/repo", story.id).status).toBe("pending");
+    expect(claimNextTask(fs, "/repo")).toMatchObject({
+      ok: true, task: { id: story.id, status: "in-progress" },
+    });
+    expect(() => getActiveTaskContext(fs, "/repo", story.id)).toThrow(/Required context document is missing/);
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
     expect(fs.existsSync("/repo/.agentctl/runtime/task.lock")).toBe(false);
   });
 
@@ -110,15 +115,13 @@ describe("deterministic task claiming", () => {
     const story = addRecord(fs, "/repo", { type: "story", title: "Task with design", parent: prd.id, related: [decision.id, proposed.id] });
     fs.mkdirSync("/repo/docs/work/plans", { recursive: true });
     fs.writeFileSync("/repo/docs/work/plans/implementation.md", `---\nparent: ${story.id}\nstatus: active\n---\n# Focused plan\n`);
-    const ctx = getActiveTaskContext; // getcontext requires claimed status
-    expect(ctx).toBeDefined();
     const claimed = claimNextTask(fs, "/repo");
     expect(claimed.ok).toBe(true);
-    if (!claimed.ok) throw new Error("Expected a claim");
-    expect(claimed.context.prompt).toContain("Build with TS");
-    expect(claimed.context.prompt).toContain("Focused plan");
-    expect(claimed.context.prompt).not.toContain("# Unreviewed approach");
-    expect(claimed.context.references).toContain("docs/decisions/" + proposed.id + "-unreviewed-approach.md");
+    const context = getActiveTaskContext(fs, "/repo", story.id);
+    expect(context.prompt).toContain("Build with TS");
+    expect(context.prompt).toContain("Focused plan");
+    expect(context.prompt).not.toContain("# Unreviewed approach");
+    expect(context.references).toContain("docs/decisions/" + proposed.id + "-unreviewed-approach.md");
   });
 
   it("does not truncate a record if a leftover temporary file prevents the update", () => {
@@ -135,8 +138,9 @@ describe("deterministic task claiming", () => {
     const { fs, prd } = setup();
     const story = addRecord(fs, "/repo", { type: "story", title: "No traversal", parent: prd.id });
     fs.writeFileSync("/repo/.agentctl/project.yaml", "project:\n  id: repo\ncontext:\n  include: [../outside.md]\n");
-    expect(() => claimNextTask(fs, "/repo")).toThrow(/remain inside the project/);
-    expect(findRecord(fs, "/repo", story.id).status).toBe("pending");
+    expect(claimNextTask(fs, "/repo")).toMatchObject({ ok: true, task: { id: story.id } });
+    expect(() => getActiveTaskContext(fs, "/repo", story.id)).toThrow(/remain inside the project/);
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
   });
 });
 
@@ -149,12 +153,12 @@ describe("explicit task ID claiming", () => {
     expect(selectNextTask(fs, "/repo")).toMatchObject({ ok: true, task: { id: first.id } });
     expect(selectTaskById(fs, "/repo", second.id)).toMatchObject({ ok: true, task: { id: second.id } });
     const claimed = claimTask(fs, "/repo", second.id);
-    expect(claimed.ok && claimed.context.task.id).toBe(second.id);
+    expect(claimed.ok && claimed.task.id).toBe(second.id);
     expect(findRecord(fs, "/repo", second.id).status).toBe("in-progress");
     expect(findRecord(fs, "/repo", first.id).status).toBe("pending");
     expect(getActiveTaskContext(fs, "/repo", second.id).task.id).toBe(second.id);
     expect(completeTask(fs, "/repo", second.id).status).toBe("implemented");
-    expect(claimNextTask(fs, "/repo")).toMatchObject({ ok: true, context: { task: { id: first.id } } });
+    expect(claimNextTask(fs, "/repo")).toMatchObject({ ok: true, task: { id: first.id } });
   });
 
   it("returns structured reasons for invalid, unknown and unavailable IDs", () => {
@@ -190,12 +194,13 @@ describe("explicit task ID claiming", () => {
     expect(findRecord(fs, "/repo", story.id).status).toBe("pending");
   });
 
-  it("keeps an explicit claim pending when context validation fails", () => {
+  it("keeps an explicit claim in progress when subsequent context retrieval fails", () => {
     const { fs, prd } = setup();
     const story = addRecord(fs, "/repo", { type: "story", title: "Incomplete context", parent: prd.id });
     fs.writeFileSync("/repo/.agentctl/project.yaml", "project:\n  id: repo\ncontext:\n  include: [docs/missing.md]\n");
-    expect(() => claimTask(fs, "/repo", story.id)).toThrow(/Required context document is missing/);
-    expect(findRecord(fs, "/repo", story.id).status).toBe("pending");
+    expect(claimTask(fs, "/repo", story.id)).toMatchObject({ ok: true, task: { id: story.id } });
+    expect(() => getActiveTaskContext(fs, "/repo", story.id)).toThrow(/Required context document is missing/);
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
     expect(fs.existsSync("/repo/.agentctl/runtime/task.lock")).toBe(false);
   });
 });

@@ -35,15 +35,19 @@ jobs:
           (cd "$tmp" && node "$cli" knowledge add --type prd --title "Smoke product")
           (cd "$tmp" && node "$cli" work add --title "Smoke implementation" --parent PRD-0001)
           (cd "$tmp" && node "$cli" work add --title "Explicitly selected" --parent PRD-0001)
-          (cd "$tmp" && node "$cli" task claim STORY-0002 > "$tmp/claim-prompt.md")
-          grep -q "Explicitly selected" "$tmp/claim-prompt.md"
-          grep -q "Smoke product" "$tmp/claim-prompt.md"
+          (cd "$tmp" && node "$cli" task claim STORY-0002 > "$tmp/claim-result.txt")
+          grep -q "Claimed STORY-0002" "$tmp/claim-result.txt"
+          if grep -q "Smoke product" "$tmp/claim-result.txt"; then
+            echo "Claim returned context unexpectedly"
+            exit 1
+          fi
           (cd "$tmp" && node "$cli" task getcontext STORY-0002 > "$tmp/resumed-prompt.md")
           grep -q "Explicitly selected" "$tmp/resumed-prompt.md"
+          grep -q "Smoke product" "$tmp/resumed-prompt.md"
           (cd "$tmp" && node "$cli" task complete STORY-0002)
           grep -q "status: implemented" "$tmp/docs/work/items/STORY-0002-explicitly-selected.md"
-          (cd "$tmp" && node "$cli" task claim next > "$tmp/next-prompt.md")
-          grep -q "Smoke implementation" "$tmp/next-prompt.md"
+          (cd "$tmp" && node "$cli" task claim next > "$tmp/next-claim.txt")
+          grep -q "Claimed STORY-0001" "$tmp/next-claim.txt"
           (cd "$tmp" && node "$cli" task notes add "Investigate smoke" --json > "$tmp/note.json")
           grep -q '"id": "N001"' "$tmp/note.json"
           (cd "$tmp" && node "$cli" task notes list --json > "$tmp/notes.json")

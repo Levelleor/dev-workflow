@@ -165,17 +165,19 @@ function activeTask(fs: FileSystem, root: string, id?: string): RecordEntry {
 }
 
 export type ClaimResult =
-  | { ok: true; context: TaskContext }
+  | { ok: true; task: { id: string; title: string; status: "in-progress" } }
   | Extract<TaskSelection, { ok: false }>;
 
 export function claimTask(fs: FileSystem, root: string, id: string): ClaimResult {
   return withTaskLock(fs, root, () => {
     const choice = id === "next" ? selectNextTask(fs, root) : selectTaskById(fs, root, id);
     if (!choice.ok) return choice;
-    // Assemble before mutating; a missing required document must not leave a claimed task.
-    buildTaskContext(fs, root, choice.task);
+    // Claiming changes task state only. getcontext assembles the full assignment.
     changeStatus(fs, choice.task, "in-progress");
-    return { ok: true, context: buildTaskContext(fs, root, { ...choice.task, status: "in-progress" }) };
+    return {
+      ok: true,
+      task: { id: choice.task.id, title: choice.task.title, status: "in-progress" },
+    };
   });
 }
 

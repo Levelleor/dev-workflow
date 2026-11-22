@@ -4,7 +4,7 @@
 
 Task records have a stable ID, parent requirement, explicit dependencies and verifiable outcome. A status in Markdown is planning information, not a trusted CI receipt.
 
-`agentctl task claim next` selects a pending or ready story by priority (1 highest, default 3), then stable ID, skipping blockers. `agentctl task claim STORY-0001` selects that exact stable ID instead of following priority, but applies the same eligibility and ownership checks. It atomically marks the selected story in-progress in the current working tree and emits task and project context. `task complete` marks the in-progress story implemented. There is no Ultracode execution loop or trusted acceptance gate yet.
+`agentctl task claim next` selects a pending or ready story by priority (1 highest, default 3), then stable ID, skipping blockers. `agentctl task claim STORY-0001` selects that exact stable ID instead of following priority, but applies the same eligibility and ownership checks. It atomically marks the selected story in-progress in the current working tree and returns compact task metadata. Run `agentctl task getcontext [STORY-0001]` separately to assemble the full task and project context. Missing required context does not prevent claiming, but causes `getcontext` to fail; the story remains in-progress for recovery. `task complete` marks the in-progress story implemented. There is no Ultracode execution loop or trusted acceptance gate yet.
 
 ## Task-local notes
 
