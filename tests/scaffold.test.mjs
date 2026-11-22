@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
+import { parse as parseYaml } from 'yaml';
 
 const required = [
   'AGENTS.md',
@@ -46,10 +47,14 @@ test('all initial packages are private until publishing is implemented', () => {
   }
 });
 
-test('root project uses Ultracode and explicitly sequential workers', () => {
-  const content = readFileSync('.agentctl/project.yaml', 'utf8');
-  assert.match(content, /engine:\s*ultracode/);
-  assert.match(content, /maxConcurrentWriters:\s*1/);
+test('project manifests contain only schema and task-context settings', () => {
+  for (const file of ['.agentctl/project.yaml', 'templates/repository/.agentctl/project.yaml']) {
+    const config = parseYaml(readFileSync(file, 'utf8'));
+    assert.deepEqual(Object.keys(config).sort(), ['context', 'schemaVersion']);
+    assert.equal(config.schemaVersion, 1);
+    assert.ok(Array.isArray(config.context.include) && config.context.include.length > 0);
+    assert.ok(Array.isArray(config.context.reference));
+  }
 });
 
 test('required verification profiles cannot silently pass', () => {

@@ -1,24 +1,4 @@
 schemaVersion: 1
-project:
-  id: dev-workflow
-  displayName: dev-workflow
-  repository: Levelleor/dev-workflow
-
-storage:
-  knowledge: repository
-  runtime: local
-  generatedIndex: false
-
-knowledge:
-  entrypoint: AGENTS.md
-  roots:
-    - docs/product
-    - docs/architecture
-    - docs/decisions
-    - docs/knowledge
-    - docs/work
-  inbox: docs/knowledge/inbox
-
 context:
   include:
     - AGENTS.md
@@ -28,11 +8,3 @@ context:
     - docs/architecture/overview.md
     - docs/decisions/README.md
     - docs/work/README.md
-
-orchestration:
-  engine: ultracode
-  mode: sequential
-  maxConcurrentWriters: 1
-  integration: serial
-
-configurationStatus: proposed

@@ -1,4 +1,4 @@
-import { basename, dirname, join, parse, resolve } from "node:path";
+import { dirname, join, parse, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { FileSystem } from "./fs.js";
 
@@ -43,10 +43,7 @@ export function initProject(fs: FileSystem, root: string, templateRoot: string):
       continue;
     }
     const template = join(templateRoot, relative);
-    let content = fs.readFileSync(template, "utf8");
-    if (relative === ".agentctl/project.yaml") {
-      content = content.replace("REPLACE_WITH_PROJECT_ID", slug(basename(root)));
-    }
+    const content = fs.readFileSync(template, "utf8");
     fs.mkdirSync(dirname(destination), { recursive: true });
     fs.writeFileSync(destination, content, { encoding: "utf8", flag: "wx" });
     created.push(relative);

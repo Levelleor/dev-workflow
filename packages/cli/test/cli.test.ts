@@ -27,7 +27,22 @@ describe("CLI interface", () => {
     const output: string[] = [];
     const result = runCli(["--json", "status"], { fs, cwd: "/repo", output: (value) => output.push(value) });
     expect(result).toBe(0);
-    expect(JSON.parse(output[0]).project.id).toBe("repo");
+    expect(JSON.parse(output[0])).toEqual({
+      records: { stories: 0, prds: 0, adrs: 0, notes: 0 },
+      activeStories: 0,
+    });
+  });
+
+  it("reports project diagnostics without a project identity", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const output: string[] = [];
+    expect(runCli(["doctor", "--json"], { fs, cwd: "/repo", output: (value) => output.push(value) })).toBe(0);
+    expect(JSON.parse(output[0])).toEqual({
+      ok: true,
+      problems: [],
+      warnings: ["Profile 'feature' is not configured"],
+    });
   });
 
   it("creates and displays work items through commands", () => {

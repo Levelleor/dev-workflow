@@ -2,7 +2,7 @@
 
 This directory describes how dev-workflow **will manage itself** once its CLI and Ultracode adapter exist.
 
-- [`project.yaml`](project.yaml): repository identity, knowledge roots and baseline execution mode.
+- [`project.yaml`](project.yaml): project-root marker and required/optional task-context documents.
 - [`models.yaml`](models.yaml): workflow role models, optional thinking levels and retry budgets.
 - [`checks.yaml`](checks.yaml): desired trusted verification profiles, not an implemented verifier.
 
