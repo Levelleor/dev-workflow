@@ -41,6 +41,20 @@ describe("CLI interface", () => {
     expect(output.at(-1)).toContain("STORY-0001");
   });
 
+  it("returns role models and retry settings together through config show", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const output: string[] = [];
+    expect(runCli(["config", "show", "--json"], {
+      fs, cwd: "/repo", output: (value) => output.push(value),
+    })).toBe(0);
+    const config = JSON.parse(output[0]);
+    expect(config.models.roles.worker).toEqual({ model: "deepseek/flash", thinking: "medium" });
+    expect(config.models.repairRetries).toBe(2);
+    expect(config.models.reviewRetries).toBe(2);
+    expect(config.models).not.toHaveProperty("limits");
+  });
+
   it("returns a nonzero exit status on unconfigured verification", () => {
     const { fs, initialize } = fixture();
     initialize();

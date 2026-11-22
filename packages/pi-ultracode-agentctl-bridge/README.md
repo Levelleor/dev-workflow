@@ -8,7 +8,7 @@ The workflow VM never receives Node APIs or arbitrary commands. The extension co
 
 1. Install the pi-ultracode fork at the tested host-capability revision (or merge the upstream PR into the installed extension).
 2. Build this monorepo: `npm ci && npm run build`.
-3. Load both extensions in Pi: the Ultracode extension and `packages/runtime-ultracode/dist/bridge.js` (or install this package through Pi).
+3. Load both extensions in Pi: the Ultracode extension and `packages/pi-ultracode-agentctl-bridge/dist/bridge.js` (or install this package through Pi).
 4. In the **user's home directory**, grant exactly these capabilities in `~/.pi/ultracode/host-capabilities.json`:
 
 ```json
@@ -20,10 +20,10 @@ The workflow VM never receives Node APIs or arbitrary commands. The extension co
 
 ## Capability contract
 
-- `agentctl.read`: task list, task context, task notes, gate list and project/model configuration.
+- `agentctl.read`: task list, task context, gate list, task notes and model/retry configuration. The `models` operation returns the project configuration, including `.agentctl/models.yaml`, in one call. Context and gates remain separate operations.
 - `agentctl.write`: claim specific/next task, mark implemented, add/remove task notes.
 - `agentctl.verify`: all verification gates or one named gate.
 
 Mutating operations are versioned, user-granted, and journalled by Ultracode for safe replay. An interrupted mutating call must be reconciled before restarting a run. Do not treat a subprocess exit code as permission to execute any other command.
 
-The workflow is at `.pi/ultracode/workflows/agentctl-sequential-feature.workflow.js`. A real GitHub PR requires the publisher role to have a valid `git` remote and authenticated `gh` CLI. Without these, the workflow reports a publication blocker and leaves the task implemented, not silently accepted as published.
+The workflow is at `.pi/ultracode/workflows/agentctl-sequential-feature.workflow.js`. The workflow reads model and optional thinking effort settings plus retry budgets together through `agentctl.read` with `op: "models"`. Those settings are defined in `.agentctl/models.yaml`, while Pi/Ultracode resolves model selection and thinking. Omitting a model or thinking level delegates to Pi or the selected Ultracode role. A real GitHub PR requires the publisher role to have a valid `git` remote and authenticated `gh` CLI. Without these, the workflow reports a publication blocker and leaves the task implemented, not silently accepted as published.

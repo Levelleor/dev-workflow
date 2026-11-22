@@ -1,4 +1,4 @@
-# Default model policy. Validate names and effort levels with your Pi provider.
+# Default workflow model policy; model and thinking are independently optional.
 schemaVersion: 1
 roles:
   architect:
@@ -10,10 +10,7 @@ roles:
   reviewer:
     model: deepseek/deepseek-flash
     thinking: medium
-limits:
-  worker:
-    maxTurns: 50
-    maxToolCalls: 150
-    timeoutSeconds: 900
-  repairRetries: 2
-  reviewRetries: 1
+
+# Additional attempts/rounds after the first.
+repairRetries: 2
+reviewRetries: 2

@@ -5,7 +5,7 @@ This directory contains the files the CLI can offer to install into another repo
 - `AGENTS.md` for agent navigation.
 - `.agentctl/project.yaml` for project-level storage and orchestration intent.
 - `.agentctl/checks.yaml` for initially unconfigured verification profiles.
-- `.agentctl/models.yaml` for default agent model policy.
+- `.agentctl/models.yaml` for optional model/thinking choices and retry budgets.
 
 Existing repositories must be inspected first. Merge or propose changes when a target file already exists; never overwrite silently.
 

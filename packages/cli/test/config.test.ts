@@ -6,10 +6,12 @@ describe("configuration", () => {
   it("reads and updates typed scalar values", () => {
     const { fs, initialize } = fixture();
     initialize();
-    fs.writeFileSync("/repo/.agentctl/models.yaml", "roles:\n  worker:\n    model: deepseek/flash\n    maxTurns: 50\n");
     expect(getSetting(fs, "/repo", "models.roles.worker.model")).toBe("deepseek/flash");
-    setSetting(fs, "/repo", "models.roles.worker.maxTurns", "25");
-    expect(getSetting(fs, "/repo", "models.roles.worker.maxTurns")).toBe(25);
+    expect(getSetting(fs, "/repo", "models.roles.worker.thinking")).toBe("medium");
+    setSetting(fs, "/repo", "models.roles.worker.thinking", "high");
+    expect(getSetting(fs, "/repo", "models.roles.worker.thinking")).toBe("high");
+    setSetting(fs, "/repo", "models.repairRetries", "1");
+    expect(getSetting(fs, "/repo", "models.repairRetries")).toBe(1);
     expect(showConfig(fs, "/repo")).toHaveProperty("models");
   });
 

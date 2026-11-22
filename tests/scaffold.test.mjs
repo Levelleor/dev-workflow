@@ -5,13 +5,12 @@ import { existsSync, readFileSync } from 'node:fs';
 const required = [
   'AGENTS.md',
   '.agentctl/project.yaml',
-  '.agentctl/models.yaml',
   '.agentctl/checks.yaml',
   'packages/cli/package.json',
   'packages/core/package.json',
   'packages/knowledge/package.json',
   'packages/verification/package.json',
-  'packages/runtime-ultracode/package.json',
+  'packages/pi-ultracode-agentctl-bridge/package.json',
   'agents/architect.md',
   'agents/worker.md',
   'agents/reviewer.md',
@@ -41,7 +40,7 @@ test('root workspace remains private and includes packages', () => {
 });
 
 test('all initial packages are private until publishing is implemented', () => {
-  for (const pkg of ['cli', 'core', 'knowledge', 'verification', 'runtime-ultracode']) {
+  for (const pkg of ['cli', 'core', 'knowledge', 'verification', 'pi-ultracode-agentctl-bridge']) {
     const manifest = JSON.parse(readFileSync(`packages/${pkg}/package.json`, 'utf8'));
     assert.equal(manifest.private, true, `${pkg} is unexpectedly publishable`);
   }

@@ -1,4 +1,4 @@
-# Proposed defaults, not an operational provider configuration.
+# Workflow model policy. Omit a model or thinking level to inherit Pi/role defaults.
 schemaVersion: 1
 roles:
   architect:
@@ -14,16 +14,6 @@ roles:
     model: deepseek/deepseek-flash
     thinking: low
 
-limits:
-  worker:
-    maxTurns: 50
-    maxToolCalls: 150
-    timeoutSeconds: 900
-  reviewer:
-    maxTurns: 15
-    timeoutSeconds: 300
-  repairRetries: 2
-  reviewRetries: 1
-
-# Provider identifiers, supported thinking levels and enforcement
-# must be validated by the future runtime adapter before use.
+# Additional attempts/rounds after the first, bounded at 10 by the snapshot reader.
+repairRetries: 2
+reviewRetries: 2

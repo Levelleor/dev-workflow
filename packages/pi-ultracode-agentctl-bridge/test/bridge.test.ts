@@ -16,9 +16,30 @@ describe("restricted pi-ultracode-agentctl-bridge", () => {
       "task", "STORY-0002", "notes", "add", "Fix timeout", "--json",
     ]);
     expect(allowedArguments("read", { op: "context", id: "STORY-0002" })).toEqual(["task", "getcontext", "STORY-0002", "--json"]);
+    expect(allowedArguments("read", { op: "models" })).toEqual(["config", "show", "--json"]);
+    expect(() => allowedArguments("read", { op: "snapshot" })).toThrow();
     expect(allowedArguments("read", { op: "list" })).toEqual(["work", "list", "--json"]);
     expect(allowedArguments("verify", {})).toEqual(["verify", "--json"]);
     expect(allowedArguments("verify", { gate: "unit" })).toEqual(["verify", "unit", "--json"]);
+  });
+
+  it("returns role models and retry settings in one config read", async () => {
+    const expected = {
+      models: {
+        roles: { worker: { model: "anthropic/claude-sonnet-4", thinking: "high" } },
+        repairRetries: 1, reviewRetries: 2,
+      },
+    };
+    const executor = vi.fn<Executor>(async () => ({
+      exitCode: 0, stdout: JSON.stringify(expected), stderr: "",
+    }));
+    const capability = createAgentctlCapabilities(executor)[0];
+    const response = await capability.execute({ op: "models" }, CONTEXT);
+    expect(executor).toHaveBeenCalledTimes(1);
+    expect(executor).toHaveBeenCalledWith(
+      ["config", "show", "--json"], CWD, CONTEXT.signal, 30000,
+    );
+    expect(response).toEqual({ exitCode: 0, value: expected });
   });
 
   it("rejects arbitrary executables, arguments, traversal and unknown operations", () => {
@@ -30,6 +51,7 @@ describe("restricted pi-ultracode-agentctl-bridge", () => {
       { op: "note-remove", noteId: "N001; echo bad" },
     ]) expect(() => allowedArguments("write", input)).toThrow();
     expect(() => allowedArguments("read", { op: "ls" })).toThrow();
+    expect(() => allowedArguments("read", { op: "context", id: "../../outside" })).toThrow();
     expect(() => allowedArguments("verify", { gate: "all; whoami" })).toThrow();
     expect(() => allowedArguments("verify", { command: "sh" })).toThrow();
   });
