@@ -10,10 +10,10 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "npm run build --workspace @levelleor/agentctl",
-    "typecheck": "npm run typecheck --workspace @levelleor/agentctl",
-    "test": "npm run test --workspace @levelleor/agentctl && node --test tests/*.test.mjs",
-    "smoke": "npm run smoke --workspace @levelleor/agentctl",
+    "build": "npm run build --workspace @levelleor/agentctl && npm run build --workspace pi-ultracode-agentctl-bridge",
+    "typecheck": "npm run typecheck --workspace @levelleor/agentctl && npm run typecheck --workspace pi-ultracode-agentctl-bridge",
+    "test": "npm run test --workspace @levelleor/agentctl && npm run test --workspace pi-ultracode-agentctl-bridge && node --test tests/*.test.mjs",
+    "smoke": "npm run smoke --workspace @levelleor/agentctl && npm run smoke --workspace pi-ultracode-agentctl-bridge",
     "check": "npm run typecheck && npm run build && npm test && npm run smoke"
   },
   "devDependencies": {

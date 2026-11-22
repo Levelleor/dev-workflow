@@ -1,6 +1,25 @@
 {
-  "name": "@levelleor/dev-workflow-runtime-ultracode",
-  "version": "0.0.0",
+  "name": "pi-ultracode-agentctl-bridge",
+  "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "description": "Narrowly scoped agentctl host capabilities for Pi Ultracode workflows",
+  "engines": {
+    "node": ">=24"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/bridge.js"
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "smoke": "node --check dist/bridge.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

@@ -1,0 +1,45 @@
+name: Ultracode bridge and Pi integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge-and-pi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - name: Fetch exact pi-ultracode host-capabilities PR revision
+        run: |
+          git clone -q https://github.com/Levelleor/pi-ultracode.git "$RUNNER_TEMP/pi-ultracode"
+          git -C "$RUNNER_TEMP/pi-ultracode" checkout -q 6013d6e809d0caa440ef0eafac4a1d1b6f0c9530
+          git -C "$RUNNER_TEMP/pi-ultracode" rev-parse HEAD
+      - name: Install upstream pinned npm and dependencies
+        run: |
+          cd "$RUNNER_TEMP"
+          npm install -g npm@11.19.0 --no-audit --no-fund
+          cd "$RUNNER_TEMP/pi-ultracode"
+          npm ci --no-audit --no-fund
+      - name: Test actual Pi CLI and Ultracode integration
+        run: |
+          test -x "$RUNNER_TEMP/pi-ultracode/node_modules/.bin/pi"
+          "$RUNNER_TEMP/pi-ultracode/node_modules/.bin/pi" --version
+          cp tests/pi-integration.test.ts "$RUNNER_TEMP/pi-ultracode/test/agentctl-bridge-integration.test.ts"
+          cd "$RUNNER_TEMP/pi-ultracode"
+          AGENTCTL_BRIDGE_JS="$GITHUB_WORKSPACE/packages/runtime-ultracode/dist/bridge.js" \
+          AGENTCTL_CLI_JS="$GITHUB_WORKSPACE/packages/cli/dist/index.js" \
+          AGENTCTL_WORKFLOW_FILE="$GITHUB_WORKSPACE/.pi/ultracode/workflows/agentctl-sequential-feature.workflow.js" \
+          AGENTCTL_ROLES_DIR="$GITHUB_WORKSPACE/.pi/ultracode/agents" \
+          ./node_modules/.bin/vp test run test/agentctl-bridge-integration.test.ts

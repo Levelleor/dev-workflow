@@ -1,14 +1,9 @@
-# Orchestration boundary
+# Ultracode orchestration architecture
 
-**Ultracode is the initial execution engine**, per [ADR-0002](../decisions/ADR-0002-ultracode-poc.md).
+The first autonomous workflow is an **interactive Pi → saved Ultracode workflow** path. The workflow itself owns agent selection, bounded retries, independent review and PR publication. `agentctl` owns only deterministic task state, context assembly, notes and gate execution.
 
-Intended responsibility split:
+The trusted Pi extension `pi-ultracode-agentctl-bridge` registers `agentctl.read`, `agentctl.write` and `agentctl.verify` with Ultracode's opt-in host capability event. The extension validates finite JSON operations and invokes the agentctl binary with `execFile`, never spawning a caller-chosen binary or enabling a shell. Project trust, explicit user grants and a durable Ultracode run journal are required. The VM cannot spawn arbitrary subprocesses.
 
-- CLI and policy layer define task contracts, required checks, model and budget policy.
-- Ultracode owns agent invocation, workflow composition and worker execution.
-- A trusted verifier, not a worker prompt, determines command-level check results.
-- The integration policy compares the candidate against current accepted source/knowledge revisions.
+One worker writes in the shared tree. A read-only reviewer uses a fresh session and receives the original requirements plus external verification evidence. Only review approval leads to `agentctl task complete` and a PR-publishing agent. Verification rejects weakened baseline gates. A missing PR URL must be treated as a publication blocker rather than success.
 
-Before implementing the adapter, prove that a predetermined sequence can be initiated and observed without asking a model to decide which gate runs next; verify restart semantics and worktree process isolation.
-
-Do not confuse Git worktree isolation with security sandboxing. Model credentials, trusted policy, and release privileges must be inaccessible to untrusted workers.
+Implementation: `.pi/ultracode/workflows/agentctl-sequential-feature.workflow.js`; extension: `packages/runtime-ultracode/src/bridge.ts`; tests: `packages/runtime-ultracode/test/` and `tests/pi-integration.test.ts`.
