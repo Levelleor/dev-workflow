@@ -256,7 +256,8 @@ test("repairRetries zero permits only the initial implementation attempt", async
       "    command: node -e 'process.exit(1)'",
       "    timeoutSeconds: 10", "profiles:", "  scaffold: [fail]", "",
     ].join("\n"));
-    modelConfig(cwd, "repairRetries: 2\nescalationThreshold: 2", "repairRetries: 0\nescalationThreshold: 0");
+    modelConfig(cwd, "repairRetries: 2", "repairRetries: 0");
+    modelConfig(cwd, "escalationThreshold: 2", "escalationThreshold: 0");
     const { result, calls } = await execute(cwd);
     assert.equal(result.status, "escalated");
     assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label), [
@@ -272,7 +273,8 @@ test("repairRetries one escalates the only retry to the stronger model", async (
       "    command: " + JSON.stringify(`node -e "process.exit(require('fs').existsSync('passed.flag') ? 0 : 1)"`),
       "    timeoutSeconds: 10", "profiles:", "  scaffold: [dynamic]", "",
     ].join("\n"));
-    modelConfig(cwd, "repairRetries: 2\nescalationThreshold: 2", "repairRetries: 1\nescalationThreshold: 1");
+    modelConfig(cwd, "repairRetries: 2", "repairRetries: 1");
+    modelConfig(cwd, "escalationThreshold: 2", "escalationThreshold: 1");
     const { result, calls } = await execute(cwd, { repairAt: 2 });
     assert.equal(result.status, "implemented");
     assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label), [
