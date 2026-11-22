@@ -32,6 +32,8 @@ describe("deterministic task claiming", () => {
     expect(context.prompt).toContain("npm test");
     expect(context.prompt).toContain("Deliver useful software");
     expect(context.prompt).toContain("First task");
+    expect(context.prompt).toContain("Status: in-progress.");
+    expect(context.prompt).not.toContain("Project:");
     expect(findRecord(fs, "/repo", higher.id).status).toBe("in-progress");
     expect(fs.existsSync(`${higher.file}.agentctl.tmp`)).toBe(false);
     expect(selectNextTask(fs, "/repo")).toMatchObject({ ok: false, code: "TASK_IN_PROGRESS" });
@@ -98,7 +100,7 @@ describe("deterministic task claiming", () => {
   it("claims independently of missing context; getcontext reports the missing document", () => {
     const { fs, prd } = setup();
     const story = addRecord(fs, "/repo", { type: "story", title: "Requires context", parent: prd.id });
-    fs.writeFileSync("/repo/.agentctl/project.yaml", "project:\n  id: repo\ncontext:\n  include: [docs/missing.md]\n");
+    fs.writeFileSync("/repo/.agentctl/project.yaml", "schemaVersion: 1\ncontext:\n  include: [docs/missing.md]\n");
     expect(claimNextTask(fs, "/repo")).toMatchObject({
       ok: true, task: { id: story.id, status: "in-progress" },
     });
@@ -137,7 +139,7 @@ describe("deterministic task claiming", () => {
   it("enforces context path boundaries", () => {
     const { fs, prd } = setup();
     const story = addRecord(fs, "/repo", { type: "story", title: "No traversal", parent: prd.id });
-    fs.writeFileSync("/repo/.agentctl/project.yaml", "project:\n  id: repo\ncontext:\n  include: [../outside.md]\n");
+    fs.writeFileSync("/repo/.agentctl/project.yaml", "schemaVersion: 1\ncontext:\n  include: [../outside.md]\n");
     expect(claimNextTask(fs, "/repo")).toMatchObject({ ok: true, task: { id: story.id } });
     expect(() => getActiveTaskContext(fs, "/repo", story.id)).toThrow(/remain inside the project/);
     expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
@@ -197,7 +199,7 @@ describe("explicit task ID claiming", () => {
   it("keeps an explicit claim in progress when subsequent context retrieval fails", () => {
     const { fs, prd } = setup();
     const story = addRecord(fs, "/repo", { type: "story", title: "Incomplete context", parent: prd.id });
-    fs.writeFileSync("/repo/.agentctl/project.yaml", "project:\n  id: repo\ncontext:\n  include: [docs/missing.md]\n");
+    fs.writeFileSync("/repo/.agentctl/project.yaml", "schemaVersion: 1\ncontext:\n  include: [docs/missing.md]\n");
     expect(claimTask(fs, "/repo", story.id)).toMatchObject({ ok: true, task: { id: story.id } });
     expect(() => getActiveTaskContext(fs, "/repo", story.id)).toThrow(/Required context document is missing/);
     expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");

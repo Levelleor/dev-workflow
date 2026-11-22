@@ -9,7 +9,7 @@ The npm package is `@levelleor/agentctl` and the executable is `agentctl`. The p
 ```sh
 agentctl init                   # install templates without overwriting files
 agentctl doctor                 # inspect configuration readiness
-agentctl status --json          # machine-readable project summary
+agentctl status --json          # machine-readable task counts
 agentctl knowledge add --type prd --title "My product"
 agentctl work add --title "First feature" --parent PRD-0001
 agentctl work list --json

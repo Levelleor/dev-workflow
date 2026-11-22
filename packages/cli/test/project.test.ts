@@ -7,7 +7,10 @@ describe("repository bootstrap", () => {
     const { fs, initialize } = fixture();
     const first = initialize();
     expect(first.created).toContain(".agentctl/project.yaml");
-    expect(fs.readFileSync("/repo/.agentctl/project.yaml", "utf8")).toContain("id: repo");
+    const manifest = fs.readFileSync("/repo/.agentctl/project.yaml", "utf8");
+    expect(manifest).toContain("context:");
+    expect(manifest).not.toContain("REPLACE_WITH_PROJECT_ID");
+    expect(manifest).not.toMatch(/^project:/m);
     expect(fs.existsSync("/repo/docs/work/items/README.md")).toBe(true);
     const second = initialize();
     expect(second.created).toEqual([]);

@@ -23,7 +23,7 @@ const help = `agentctl: repository-backed coding-agent development workflow
 Usage:
   agentctl init [directory]                         Safely install project files
   agentctl doctor                                   Inspect project setup
-  agentctl status [--json]                          Show project and task counts
+  agentctl status [--json]                          Show task counts
   agentctl task claim <ID|next> [--json]            Claim a task, returning its ID and status
   Example: agentctl task claim next                  Select automatically by priority
   agentctl task getcontext [ID] [--json]            Resume an in-progress task
@@ -116,7 +116,8 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     const root = findProjectRoot(fs, cwd);
 
     if (command === "doctor") {
-      const project = readYaml(fs, join(root, ".agentctl", "project.yaml"));
+      // Validate the manifest, without requiring a separate project identity.
+      readYaml(fs, join(root, ".agentctl", "project.yaml"));
       const problems: string[] = [];
       const warnings: string[] = [];
       if (!fs.existsSync(join(root, "AGENTS.md"))) problems.push("Missing AGENTS.md");
@@ -125,14 +126,13 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
       for (const [name, value] of Object.entries(profiles ?? {})) {
         if (!Array.isArray(value) || value.length === 0) warnings.push(`Profile '${name}' is not configured`);
       }
-      emit({ ok: problems.length === 0, project: project.project, problems, warnings });
+      emit({ ok: problems.length === 0, problems, warnings });
       return problems.length ? 1 : 0;
     }
 
     if (command === "status") {
-      const project = readYaml(fs, join(root, ".agentctl", "project.yaml"));
       const records = listRecords(fs, root);
-      emit({ project: project.project, orchestration: project.orchestration, records: {
+      emit({ records: {
         stories: records.filter((r) => r.type === "story").length,
         prds: records.filter((r) => r.type === "prd").length,
         adrs: records.filter((r) => r.type === "adr").length,

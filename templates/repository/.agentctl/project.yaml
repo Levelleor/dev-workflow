@@ -1,12 +1,4 @@
 schemaVersion: 1
-project:
-  id: REPLACE_WITH_PROJECT_ID
-storage:
-  knowledge: repository
-  runtime: local
-knowledge:
-  entrypoint: AGENTS.md
-  roots: [docs]
 context:
   include:
     - AGENTS.md
@@ -16,8 +8,3 @@ context:
     - docs/product/README.md
     - docs/decisions/README.md
     - docs/work/items/README.md
-orchestration:
-  engine: ultracode
-  mode: sequential
-  maxConcurrentWriters: 1
-configurationStatus: proposed

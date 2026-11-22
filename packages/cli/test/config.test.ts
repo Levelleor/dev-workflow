@@ -13,14 +13,21 @@ describe("configuration", () => {
     setSetting(fs, "/repo", "models.repairRetries", "1");
     expect(getSetting(fs, "/repo", "models.repairRetries")).toBe(1);
     expect(showConfig(fs, "/repo")).toHaveProperty("models");
+    expect(showConfig(fs, "/repo").project).toEqual({
+      schemaVersion: 1,
+      context: {
+        include: ["AGENTS.md", "docs/project.md", "docs/conventions.md"],
+        reference: ["docs/product/README.md"],
+      },
+    });
   });
 
   it("rejects unknown, unsafe, and protected settings", () => {
     const { fs, initialize } = fixture();
     initialize();
     expect(() => setSetting(fs, "/repo", "project.__proto__.polluted", "true")).toThrow(/Unsafe/);
-    expect(() => setSetting(fs, "/repo", "project.project.unknown", "true")).toThrow(/Unknown setting/);
+    expect(() => setSetting(fs, "/repo", "project.context.unknown", "true")).toThrow(/Unknown setting/);
     expect(() => setSetting(fs, "/repo", "checks.profiles.feature", "true")).toThrow(/reviewed/);
-    expect(() => setSetting(fs, "/repo", "project.project.id", "{x: 2}")).toThrow(/scalar/);
+    expect(() => setSetting(fs, "/repo", "project.context.include", "{x: 2}")).toThrow(/scalar/);
   });
 });

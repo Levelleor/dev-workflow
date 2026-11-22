@@ -122,7 +122,7 @@ export function buildTaskContext(fs: FileSystem, root: string, task: RecordEntry
   const render = (document: ContextDocument) => `### ${document.path}\n\n${document.content.trimEnd()}`;
   const instruction = [
     `# Assignment: ${task.id} — ${task.title}`,
-    `Status: ${task.status}. Project: ${String((project.project as Record<string, unknown> | undefined)?.id ?? "unknown")}.`,
+    `Status: ${task.status}.`,
     "Implement this assigned task using the source repository. Follow the acceptance criteria and applicable decisions below.",
     "Use agentctl for work/knowledge queries and state updates. Do not reinterpret optional references as automatically loaded context.",
     "",
