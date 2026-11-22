@@ -20,10 +20,10 @@ The workflow VM never receives Node APIs or arbitrary commands. The extension co
 
 ## Capability contract
 
-- `agentctl.read`: task list, context, task snapshot (context plus baseline gates in one CLI call), notes and gate list. Model policy is not part of agentctl.
+- `agentctl.read`: task list, context, task snapshot (context, baseline gates and `.agentctl/models.yaml` policy in one CLI call), notes and gate list.
 - `agentctl.write`: claim specific/next task, mark implemented, add/remove task notes.
 - `agentctl.verify`: all verification gates or one named gate.
 
 Mutating operations are versioned, user-granted, and journalled by Ultracode for safe replay. An interrupted mutating call must be reconciled before restarting a run. Do not treat a subprocess exit code as permission to execute any other command.
 
-The workflow is at `.pi/ultracode/workflows/agentctl-sequential-feature.workflow.js`. Model and optional thinking effort settings, along with retry budgets, are configured in that workflow. Omitting a model or thinking level delegates to Pi or the selected Ultracode role. A real GitHub PR requires the publisher role to have a valid `git` remote and authenticated `gh` CLI. Without these, the workflow reports a publication blocker and leaves the task implemented, not silently accepted as published.
+The workflow is at `.pi/ultracode/workflows/agentctl-sequential-feature.workflow.js`. The workflow reads model and optional thinking effort settings plus retry budgets from the batched `agentctl.read` snapshot. Those settings are defined in `.agentctl/models.yaml`, while Pi/Ultracode resolves model selection and thinking. Omitting a model or thinking level delegates to Pi or the selected Ultracode role. A real GitHub PR requires the publisher role to have a valid `git` remote and authenticated `gh` CLI. Without these, the workflow reports a publication blocker and leaves the task implemented, not silently accepted as published.

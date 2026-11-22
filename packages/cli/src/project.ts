@@ -35,7 +35,7 @@ export function initProject(fs: FileSystem, root: string, templateRoot: string):
   if (!fs.existsSync(root)) throw new Error(`Target directory does not exist: ${root}`);
   const created: string[] = [];
   const skipped: string[] = [];
-  const files = ["AGENTS.md", ".agentctl/project.yaml", ".agentctl/checks.yaml", "docs/project.md", "docs/conventions.md"];
+  const files = ["AGENTS.md", ".agentctl/project.yaml", ".agentctl/checks.yaml", ".agentctl/models.yaml", "docs/project.md", "docs/conventions.md"];
   for (const relative of files) {
     const destination = join(root, relative);
     if (fs.existsSync(destination)) {

@@ -1,0 +1,19 @@
+# Workflow model policy. Omit a model or thinking level to inherit Pi/role defaults.
+schemaVersion: 1
+roles:
+  architect:
+    model: openai/gpt-6.2-sol
+    thinking: high
+  worker:
+    model: deepseek/deepseek-flash
+    thinking: medium
+  reviewer:
+    model: deepseek/deepseek-flash
+    thinking: medium
+  curator:
+    model: deepseek/deepseek-flash
+    thinking: low
+
+# Additional attempts/rounds after the first, bounded at 10 by the snapshot reader.
+repairRetries: 2
+reviewRetries: 2

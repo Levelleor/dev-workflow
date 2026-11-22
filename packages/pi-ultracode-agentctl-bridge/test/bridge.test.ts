@@ -18,10 +18,31 @@ describe("restricted pi-ultracode-agentctl-bridge", () => {
     expect(allowedArguments("read", { op: "context", id: "STORY-0002" })).toEqual(["task", "getcontext", "STORY-0002", "--json"]);
     expect(allowedArguments("read", { op: "snapshot", id: "STORY-0002" })).toEqual(["task", "snapshot", "STORY-0002", "--json"]);
     expect(allowedArguments("read", { op: "snapshot" })).toEqual(["task", "snapshot", "--json"]);
-    expect(() => allowedArguments("read", { op: "models" })).toThrow();
+    expect(() => allowedArguments("read", { op: "models" })).toThrow(); // Models are included in snapshot.
     expect(allowedArguments("read", { op: "list" })).toEqual(["work", "list", "--json"]);
     expect(allowedArguments("verify", {})).toEqual(["verify", "--json"]);
     expect(allowedArguments("verify", { gate: "unit" })).toEqual(["verify", "unit", "--json"]);
+  });
+
+  it("returns a batched model, context and gate snapshot with one subprocess", async () => {
+    const expected = {
+      context: { task: { id: "STORY-0002" }, prompt: "Implement story" },
+      gates: [{ name: "unit", command: "npm test", required: true }],
+      models: {
+        roles: { worker: { model: "anthropic/claude-sonnet-4", thinking: "high" } },
+        repairRetries: 1, reviewRetries: 2,
+      },
+    };
+    const executor = vi.fn<Executor>(async () => ({
+      exitCode: 0, stdout: JSON.stringify(expected), stderr: "",
+    }));
+    const capability = createAgentctlCapabilities(executor)[0];
+    const response = await capability.execute({ op: "snapshot", id: "STORY-0002" }, CONTEXT);
+    expect(executor).toHaveBeenCalledTimes(1);
+    expect(executor).toHaveBeenCalledWith(
+      ["task", "snapshot", "STORY-0002", "--json"], CWD, CONTEXT.signal, 30000,
+    );
+    expect(response).toEqual({ exitCode: 0, value: expected });
   });
 
   it("rejects arbitrary executables, arguments, traversal and unknown operations", () => {

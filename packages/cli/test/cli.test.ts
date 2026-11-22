@@ -43,7 +43,7 @@ describe("CLI interface", () => {
     expect(output.at(-1)).toContain("STORY-0001");
   });
 
-  it("returns task context and gate policy together in one read-only snapshot", () => {
+  it("returns models, task context and gate policy together in one read-only snapshot", () => {
     const { fs, initialize } = fixture();
     initialize();
     const prd = addRecord(fs, "/repo", { type: "prd", title: "Product" });
@@ -57,10 +57,29 @@ describe("CLI interface", () => {
     expect(snapshot.context.task.id).toBe(story.id);
     expect(snapshot.context.prompt).toContain("Product");
     expect(snapshot.gates).toEqual([{ name: "scaffold", command: "npm test", timeoutSeconds: 5, required: true }]);
+    expect(snapshot.models).toEqual({
+      roles: { worker: { model: "deepseek/flash", thinking: "medium" } },
+      repairRetries: 2, reviewRetries: 2,
+    });
     expect(runCli(["task", "snapshot", "STORY-9999", "--json"], opts)).toBe(1);
     expect(errors.at(-1)).toMatch(/not in progress/);
     expect(runCli(["task", "snapshot", story.id, "extra", "--json"], opts)).toBe(1);
     expect(errors.at(-1)).toMatch(/Usage/);
+  });
+
+  it("rejects malformed model policy instead of passing unvalidated data to a workflow", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const prd = addRecord(fs, "/repo", { type: "prd", title: "Product" });
+    const story = addRecord(fs, "/repo", { type: "story", title: "Implement feature", parent: prd.id });
+    expect(claimTask(fs, "/repo", story.id).ok).toBe(true);
+    const errors: string[] = [];
+    fs.writeFileSync("/repo/.agentctl/models.yaml", "roles:\n  worker:\n    thinking: invalid\nrepairRetries: -1\n");
+    const exit = runCli(["task", "snapshot", "--json"], {
+      fs, cwd: "/repo", error: (value) => errors.push(value),
+    });
+    expect(exit).toBe(1);
+    expect(errors.at(-1)).toMatch(/repairRetries/);
   });
 
   it("returns a nonzero exit status on unconfigured verification", () => {

@@ -147,7 +147,7 @@ export function createAgentctlCapabilities(executor: Executor = execAgentctl): C
     kind: "read" | "write" | "verify",
   ): CapabilityDefinition {
     return {
-      name, version: kind === "read" ? "2" : "1", effect, timeoutMs, inputSchema: schema,
+      name, version: kind === "read" ? "3" : "1", effect, timeoutMs, inputSchema: schema,
       async execute(input, context) {
         const argv = allowedArguments(kind, input);
         // This cwd is supplied by Ultracode for a trusted project, never by the workflow.

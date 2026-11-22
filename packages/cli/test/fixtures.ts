@@ -16,6 +16,10 @@ export function fixture() {
     "context:", "  include: [AGENTS.md, docs/project.md, docs/conventions.md]", "  reference: [docs/product/README.md]",
     "orchestration:", "  engine: ultracode", "  mode: sequential", "",
   ].join("\n"));
+  mem.writeFileSync("/templates/.agentctl/models.yaml", [
+    "schemaVersion: 1", "roles:", "  worker:", "    model: deepseek/flash",
+    "    thinking: medium", "repairRetries: 2", "reviewRetries: 2", "",
+  ].join("\n"));
   mem.writeFileSync("/templates/.agentctl/checks.yaml", [
     "schemaVersion: 1", "checks:", "  scaffold:",
     "    command: npm test", "    timeoutSeconds: 5", "profiles:",

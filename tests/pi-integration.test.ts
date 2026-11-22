@@ -47,6 +47,13 @@ async function project(run: (cwd: string) => Promise<void>) {
   }
 }
 
+function modelConfig(cwd: string, from: string, to: string): void {
+  const file = path.join(cwd, ".agentctl", "models.yaml");
+  const config = fs.readFileSync(file, "utf8");
+  assert.ok(config.includes(from), "Missing model config fixture: " + from);
+  fs.writeFileSync(file, config.replace(from, to));
+}
+
 function journal(cwd: string, source = workflow) {
   const header = {
     type: "run" as const, runId: "agentctl-sequential-test",
@@ -201,12 +208,11 @@ test("Pi workflow stops after exhausted verification escalation", async () => {
 
 test("omitting thinking inherits the role/Pi thinking effort without a suffix", async () => {
   await project(async (cwd) => {
-    const source = workflow.replace(
-      'worker: { model: "deepseek/deepseek-flash", thinking: "medium" }',
-      'worker: { model: "deepseek/deepseek-flash" }',
+    modelConfig(cwd,
+      "  worker:\n    model: deepseek/deepseek-flash\n    thinking: medium",
+      "  worker:\n    model: deepseek/deepseek-flash",
     );
-    assert.notEqual(source, workflow);
-    const { result, calls } = await execute(cwd, {}, source);
+    const { result, calls } = await execute(cwd);
     assert.equal(result.status, "implemented");
     assert.equal(calls.find((call) => call.label === "cheap implementation")!.modelPattern, "deepseek/deepseek-flash");
   });
@@ -214,25 +220,23 @@ test("omitting thinking inherits the role/Pi thinking effort without a suffix", 
 
 test("omitting model and thinking delegates selection to Pi", async () => {
   await project(async (cwd) => {
-    const source = workflow.replace(
-      'worker: { model: "deepseek/deepseek-flash", thinking: "medium" }',
-      "worker: {}",
+    modelConfig(cwd,
+      "  worker:\n    model: deepseek/deepseek-flash\n    thinking: medium",
+      "  worker: {}",
     );
-    assert.notEqual(source, workflow);
-    const { result, calls } = await execute(cwd, {}, source);
+    const { result, calls } = await execute(cwd);
     assert.equal(result.status, "implemented");
     assert.equal(calls.find((call) => call.label === "cheap implementation")!.modelPattern, undefined);
   });
 });
 
-test("thinking without an explicit model overrides effort only", async () => {
+test("thinking without a model overrides effort while inheriting Pi's model", async () => {
   await project(async (cwd) => {
-    const source = workflow.replace(
-      'worker: { model: "deepseek/deepseek-flash", thinking: "medium" }',
-      'worker: { thinking: "high" }',
+    modelConfig(cwd,
+      "  worker:\n    model: deepseek/deepseek-flash\n    thinking: medium",
+      "  worker:\n    thinking: high",
     );
-    assert.notEqual(source, workflow);
-    const { result, calls } = await execute(cwd, {}, source);
+    const { result, calls } = await execute(cwd);
     assert.equal(result.status, "implemented");
     assert.equal(calls.find((call) => call.label === "cheap implementation")!.modelPattern, ":high");
   });
@@ -241,12 +245,12 @@ test("thinking without an explicit model overrides effort only", async () => {
 test("repairRetries zero permits only the initial implementation attempt", async () => {
   await project(async (cwd) => {
     fs.writeFileSync(path.join(cwd, ".agentctl/checks.yaml"), [
-      "checks:", "  fail:", "    command: node -e 'process.exit(1)'",
+      "checks:", "  fail:",
+      "    command: node -e 'process.exit(1)'",
       "    timeoutSeconds: 10", "profiles:", "  scaffold: [fail]", "",
     ].join("\n"));
-    const source = workflow.replace("repairRetries: 2", "repairRetries: 0");
-    assert.notEqual(source, workflow);
-    const { result, calls } = await execute(cwd, {}, source);
+    modelConfig(cwd, "repairRetries: 2", "repairRetries: 0");
+    const { result, calls } = await execute(cwd);
     assert.equal(result.status, "escalated");
     assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label), [
       "cheap implementation",
@@ -261,9 +265,8 @@ test("repairRetries one escalates the only retry to the stronger model", async (
       "    command: " + JSON.stringify(`node -e "process.exit(require('fs').existsSync('passed.flag') ? 0 : 1)"`),
       "    timeoutSeconds: 10", "profiles:", "  scaffold: [dynamic]", "",
     ].join("\n"));
-    const source = workflow.replace("repairRetries: 2", "repairRetries: 1");
-    assert.notEqual(source, workflow);
-    const { result, calls } = await execute(cwd, { repairAt: 2 }, source);
+    modelConfig(cwd, "repairRetries: 2", "repairRetries: 1");
+    const { result, calls } = await execute(cwd, { repairAt: 2 });
     assert.equal(result.status, "implemented");
     assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label), [
       "cheap implementation", "strong implementation",
@@ -273,9 +276,8 @@ test("repairRetries one escalates the only retry to the stronger model", async (
 
 test("reviewRetries zero ends after the first independent rejection", async () => {
   await project(async (cwd) => {
-    const source = workflow.replace("reviewRetries: 2", "reviewRetries: 0");
-    assert.notEqual(source, workflow);
-    const { result, calls } = await execute(cwd, { reviewerRejections: 1 }, source);
+    modelConfig(cwd, "reviewRetries: 2", "reviewRetries: 0");
+    const { result, calls } = await execute(cwd, { reviewerRejections: 1 });
     assert.equal(result.status, "escalated");
     assert.equal(result.reviewRounds, 1);
     assert.equal(calls.filter((call) => call.label === "independent review").length, 1);
@@ -284,9 +286,8 @@ test("reviewRetries zero ends after the first independent rejection", async () =
 
 test("reviewRetries one permits a second round after a rejection", async () => {
   await project(async (cwd) => {
-    const source = workflow.replace("reviewRetries: 2", "reviewRetries: 1");
-    assert.notEqual(source, workflow);
-    const { result, calls } = await execute(cwd, { reviewerRejections: 1 }, source);
+    modelConfig(cwd, "reviewRetries: 2", "reviewRetries: 1");
+    const { result, calls } = await execute(cwd, { reviewerRejections: 1 });
     assert.equal(result.status, "implemented");
     assert.equal(result.reviewRounds, 2);
     assert.equal(calls.filter((call) => call.label === "independent review").length, 2);

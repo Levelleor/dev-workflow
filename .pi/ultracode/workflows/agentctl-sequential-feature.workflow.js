@@ -40,32 +40,6 @@ const REVIEW = {
   additionalProperties: false,
 };
 
-// Workflow-owned policy. Omit model to use Pi's selected model; omit thinking
-// to inherit the role's thinking level or Pi's current thinking effort.
-const ROLES = {
-  worker: { model: "deepseek/deepseek-flash", thinking: "medium" },
-  architect: { model: "openai/gpt-6.2-sol", thinking: "high" },
-  reviewer: { model: "deepseek/deepseek-flash", thinking: "medium" },
-};
-
-// Retry counts mean *additional* attempts after the first attempt/review.
-const RETRIES = { repairRetries: 2, reviewRetries: 2 };
-if (!Number.isInteger(RETRIES.repairRetries) || RETRIES.repairRetries < 0 ||
-    RETRIES.repairRetries > 10 || !Number.isInteger(RETRIES.reviewRetries) ||
-    RETRIES.reviewRetries < 0 || RETRIES.reviewRetries > 10) {
-  throw new Error("Retry budgets must be integers between 0 and 10");
-}
-const maxImplementationAttempts = 1 + RETRIES.repairRetries;
-const maxReviewRounds = 1 + RETRIES.reviewRetries;
-
-// Ultracode accepts effort as a suffix (":high" keeps Pi's selected model).
-// An undefined model deliberately delegates both choices to Pi/the agent role.
-const modelFor = (role) =>
-  role.thinking ? (role.model || "") + ":" + role.thinking : role.model;
-const cheapModel = modelFor(ROLES.worker);
-const strongModel = modelFor(ROLES.architect);
-const reviewerModel = modelFor(ROLES.reviewer);
-
 phase("Claim");
 const requested = args && args.taskId ? args.taskId : "next";
 const claim = await hostCall("agentctl.write", { op: "claim", id: requested });
@@ -84,6 +58,27 @@ if (snapshot.exitCode !== 0 || !snapshot.value || !snapshot.value.context ||
 }
 const assignment = snapshot.value.context.prompt;
 const originalGates = snapshot.value.gates;
+
+// One snapshot contains task context, baseline gates and the models.yaml
+// policy. No additional agentctl calls are needed to select agent roles.
+const policy = snapshot.value.models;
+if (!policy || !policy.roles || typeof policy.roles !== "object" ||
+    !Number.isInteger(policy.repairRetries) || policy.repairRetries < 0 ||
+    policy.repairRetries > 10 || !Number.isInteger(policy.reviewRetries) ||
+    policy.reviewRetries < 0 || policy.reviewRetries > 10) {
+  throw new Error("Invalid model and retry policy returned by agentctl snapshot");
+}
+const maxImplementationAttempts = 1 + policy.repairRetries;
+const maxReviewRounds = 1 + policy.reviewRetries;
+
+// Model and thinking are independently optional. Omitting both inherits Pi's
+// current model and role/Pi effort. Thinking alone uses an Ultracode ":high"
+// suffix, preserving Pi's model selection.
+const modelFor = (role) => !role ? undefined :
+  role.thinking ? (role.model || "") + ":" + role.thinking : role.model;
+const cheapModel = modelFor(policy.roles.worker);
+const strongModel = modelFor(policy.roles.architect);
+const reviewerModel = modelFor(policy.roles.reviewer);
 
 const lookup = await agent(
   "Read the supplied claimed story and give a short implementation map: likely source paths, risks and acceptance criteria. " +

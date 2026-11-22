@@ -1,0 +1,16 @@
+# Default workflow model policy; model and thinking are independently optional.
+schemaVersion: 1
+roles:
+  architect:
+    model: openai/gpt-6.2-sol
+    thinking: high
+  worker:
+    model: deepseek/deepseek-flash
+    thinking: medium
+  reviewer:
+    model: deepseek/deepseek-flash
+    thinking: medium
+
+# Additional attempts/rounds after the first.
+repairRetries: 2
+reviewRetries: 2
