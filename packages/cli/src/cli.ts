@@ -5,7 +5,6 @@ import { disk } from "./fs.js";
 import { findProjectRoot, initProject, readYaml } from "./project.js";
 import { addRecord, findRecord, listRecords, type RecordType } from "./records.js";
 import { getSetting, setSetting, showConfig } from "./config.js";
-import { loadWorkflowModels } from "./model-policy.js";
 import { addGate, listGates, runCommand, verify, type RunCommand } from "./verify.js";
 import { addTaskNote, listTaskNotes, removeTaskNote } from "./task-notes.js";
 import { claimTask, completeTask, getActiveTaskContext } from "./task.js";
@@ -28,7 +27,6 @@ Usage:
   agentctl task claim <ID|next> [--json]            Claim a task, returning its ID and status
   Example: agentctl task claim next                  Select automatically by priority
   agentctl task getcontext [ID] [--json]            Resume an in-progress task
-  agentctl task snapshot [ID] [--json]              Return task context, models and verification gates
   agentctl task complete [ID] [--json]              Mark an in-progress task implemented
   agentctl task notes add "text" [--json]            Add a note to the current task
   agentctl task notes list [--json]                  List notes on the current task
@@ -181,21 +179,13 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
         emit(json ? context : context.prompt);
         return 0;
       }
-      if (action === "snapshot") {
-        if (rest.length > 1) throw new Error("Usage: agentctl task snapshot [ID] [--json]");
-        const context = getActiveTaskContext(fs, root, rest[0]);
-        const gates = listGates(fs, root);
-        const models = loadWorkflowModels(fs, root);
-        emit({ context, gates, models });
-        return 0;
-      }
       if (action === "complete") {
         if (rest.length > 1) throw new Error("Usage: agentctl task complete [ID] [--json]");
         const completed = completeTask(fs, root, rest[0]);
         emit(json ? { id: completed.id, status: completed.status } : `${completed.id} marked implemented. Verification and acceptance are separate.`);
         return 0;
       }
-      throw new Error("Usage: agentctl task claim <ID|next> | task getcontext [ID] | task snapshot [ID] | task complete [ID]");
+      throw new Error("Usage: agentctl task claim <ID|next> | task getcontext [ID] | task complete [ID]");
     }
 
     if (command === "work") {

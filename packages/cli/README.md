@@ -49,7 +49,6 @@ The production CLI is built with TypeScript and includes its repository template
 agentctl task claim next                 # select by priority and return claimed task metadata
 agentctl task claim STORY-0001 --json    # explicitly claim a task by stable ID; JSON contains task ID/status
 agentctl task getcontext STORY-0001      # assemble full context for the claimed task
-agentctl task snapshot STORY-0001 --json  # task context, models and verification gates in one read
 agentctl task complete STORY-0001        # mark that task implemented, not accepted
 ```
 
@@ -57,7 +56,7 @@ Task IDs are canonical identifiers such as `STORY-0001`, not file names. All tas
 
 New stories start `pending`. Optional frontmatter includes `priority: 1` (highest) to `5` (lowest), `depends_on: [STORY-0001]`, and `blocked: true`. Claimed tasks become `in-progress`; `complete` changes the status to `implemented`. Proposed stories are not claimable. Dependencies count as resolved when implemented/completed/accepted.
 
-`.agentctl/project.yaml` defines `context.include` for common project documents and `context.reference` for optional paths. The complete prompt embeds the story, parent PRD, relevant accepted decisions and active task plan where present. Missing essential context makes `getcontext` or `snapshot` fail, but the claim remains in-progress; correct the missing document and retry with the same ID. `snapshot` returns the task context, validated `.agentctl/models.yaml` policy and current verification gates without executing them or changing task state.
+`.agentctl/project.yaml` defines `context.include` for common project documents and `context.reference` for optional paths. The complete prompt embeds the story, parent PRD, relevant accepted decisions and active task plan where present. Missing essential context makes `getcontext` fail, but the claim remains in-progress; correct the missing document and retry with the same ID. `agentctl config show --json` returns the configured models, optional thinking levels and retry budgets together; task context and gate reads remain separate.
 
 The repository's task Markdown is Git tracked. The process-level `.agentctl/runtime/task.lock` is ignored by Git and protects concurrent claims **within one working tree**. It does not coordinate separate worktrees, machines, or stale locks after crashes. The first Ultracode integration must retain the single-writer constraint until shared coordination is implemented.
 

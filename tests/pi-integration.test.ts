@@ -145,6 +145,13 @@ async function execute(cwd: string, behaviour: Parameters<typeof fakeRunner>[1] 
   }
 }
 
+test("settings are read independently of task context and verification gates", () => {
+  assert.match(workflow, /op: "models"/);
+  assert.match(workflow, /op: "context"/);
+  assert.match(workflow, /op: "gates"/);
+  assert.doesNotMatch(workflow, /op: "snapshot"/);
+});
+
 test("Pi host registers exactly three validated capabilities", () => {
   const caps = registeredWithPi();
   assert.deepEqual(caps.map((cap) => cap.name), ["agentctl.read", "agentctl.write", "agentctl.verify"]);

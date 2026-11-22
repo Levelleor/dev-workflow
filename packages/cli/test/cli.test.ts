@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli.js";
 import { fixture } from "./fixtures.js";
-import { addRecord } from "../src/records.js";
-import { claimTask } from "../src/task.js";
 
 describe("CLI interface", () => {
   it("exposes usage and version without a repository", () => {
@@ -43,43 +41,18 @@ describe("CLI interface", () => {
     expect(output.at(-1)).toContain("STORY-0001");
   });
 
-  it("returns models, task context and gate policy together in one read-only snapshot", () => {
+  it("returns role models and retry settings together through config show", () => {
     const { fs, initialize } = fixture();
     initialize();
-    const prd = addRecord(fs, "/repo", { type: "prd", title: "Product" });
-    const story = addRecord(fs, "/repo", { type: "story", title: "Implement feature", parent: prd.id });
-    expect(claimTask(fs, "/repo", story.id).ok).toBe(true);
     const output: string[] = [];
-    const errors: string[] = [];
-    const opts = { fs, cwd: "/repo", output: (value: string) => output.push(value), error: (value: string) => errors.push(value) };
-    expect(runCli(["task", "snapshot", story.id, "--json"], opts)).toBe(0);
-    const snapshot = JSON.parse(output[0]);
-    expect(snapshot.context.task.id).toBe(story.id);
-    expect(snapshot.context.prompt).toContain("Product");
-    expect(snapshot.gates).toEqual([{ name: "scaffold", command: "npm test", timeoutSeconds: 5, required: true }]);
-    expect(snapshot.models).toEqual({
-      roles: { worker: { model: "deepseek/flash", thinking: "medium" } },
-      repairRetries: 2, reviewRetries: 2,
-    });
-    expect(runCli(["task", "snapshot", "STORY-9999", "--json"], opts)).toBe(1);
-    expect(errors.at(-1)).toMatch(/not in progress/);
-    expect(runCli(["task", "snapshot", story.id, "extra", "--json"], opts)).toBe(1);
-    expect(errors.at(-1)).toMatch(/Usage/);
-  });
-
-  it("rejects malformed model policy instead of passing unvalidated data to a workflow", () => {
-    const { fs, initialize } = fixture();
-    initialize();
-    const prd = addRecord(fs, "/repo", { type: "prd", title: "Product" });
-    const story = addRecord(fs, "/repo", { type: "story", title: "Implement feature", parent: prd.id });
-    expect(claimTask(fs, "/repo", story.id).ok).toBe(true);
-    const errors: string[] = [];
-    fs.writeFileSync("/repo/.agentctl/models.yaml", "roles:\n  worker:\n    thinking: invalid\nrepairRetries: -1\n");
-    const exit = runCli(["task", "snapshot", "--json"], {
-      fs, cwd: "/repo", error: (value) => errors.push(value),
-    });
-    expect(exit).toBe(1);
-    expect(errors.at(-1)).toMatch(/repairRetries/);
+    expect(runCli(["config", "show", "--json"], {
+      fs, cwd: "/repo", output: (value) => output.push(value),
+    })).toBe(0);
+    const config = JSON.parse(output[0]);
+    expect(config.models.roles.worker).toEqual({ model: "deepseek/flash", thinking: "medium" });
+    expect(config.models.repairRetries).toBe(2);
+    expect(config.models.reviewRetries).toBe(2);
+    expect(config.models).not.toHaveProperty("limits");
   });
 
   it("returns a nonzero exit status on unconfigured verification", () => {

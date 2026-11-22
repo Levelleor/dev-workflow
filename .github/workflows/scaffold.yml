@@ -41,8 +41,8 @@ jobs:
             echo "Claim returned context unexpectedly"
             exit 1
           fi
-          (cd "$tmp" && node "$cli" task snapshot STORY-0002 --json > "$tmp/snapshot.json")
-          node -e 'const d=require(process.argv[1]); if (d.context.task.id !== "STORY-0002" || !Array.isArray(d.gates) || !d.models.roles || d.models.repairRetries !== 2) process.exit(1)' "$tmp/snapshot.json"
+          (cd "$tmp" && node "$cli" config show --json > "$tmp/settings.json")
+          node -e 'const d=require(process.argv[1]); if (!d.models.roles || d.models.repairRetries !== 2 || d.models.reviewRetries !== 2) process.exit(1)' "$tmp/settings.json"
           (cd "$tmp" && node "$cli" task getcontext STORY-0002 > "$tmp/resumed-prompt.md")
           grep -q "Explicitly selected" "$tmp/resumed-prompt.md"
           grep -q "Smoke product" "$tmp/resumed-prompt.md"

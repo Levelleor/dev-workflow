@@ -40,6 +40,32 @@ const REVIEW = {
   additionalProperties: false,
 };
 
+// Read all role model, optional thinking, and retry settings together.
+// This call does not read the task context or verification-gate state.
+const settings = await hostCall("agentctl.read", { op: "models" });
+const policy = settings.value && settings.value.models;
+if (settings.exitCode !== 0 || !policy || !policy.roles ||
+    typeof policy.roles !== "object" || Array.isArray(policy.roles)) {
+  throw new Error("Invalid models.yaml configuration returned by agentctl");
+}
+const repairRetries = policy.repairRetries ?? 2;
+const reviewRetries = policy.reviewRetries ?? 2;
+if (!Number.isInteger(repairRetries) || repairRetries < 0 ||
+    repairRetries > 10 || !Number.isInteger(reviewRetries) ||
+    reviewRetries < 0 || reviewRetries > 10) {
+  throw new Error("Retry budgets must be integers between 0 and 10");
+}
+const maxImplementationAttempts = 1 + repairRetries;
+const maxReviewRounds = 1 + reviewRetries;
+
+// Model and thinking are independently optional; omissions inherit Pi/role
+// defaults. A thinking-only suffix like ":high" preserves Pi's chosen model.
+const modelFor = (role) => !role ? undefined :
+  role.thinking ? (role.model || "") + ":" + role.thinking : role.model;
+const cheapModel = modelFor(policy.roles.worker);
+const strongModel = modelFor(policy.roles.architect);
+const reviewerModel = modelFor(policy.roles.reviewer);
+
 phase("Claim");
 const requested = args && args.taskId ? args.taskId : "next";
 const claim = await hostCall("agentctl.write", { op: "claim", id: requested });
@@ -48,37 +74,16 @@ if (claim.exitCode !== 0) {
   return { status: "unavailable", reason: claim.value };
 }
 const id = claim.value.task.id;
-// One read-only CLI call obtains both the task context and baseline gates.
-const snapshot = await hostCall("agentctl.read", { op: "snapshot", id });
-if (snapshot.exitCode !== 0 || !snapshot.value || !snapshot.value.context ||
-    !snapshot.value.context.task || snapshot.value.context.task.id !== id ||
-    typeof snapshot.value.context.prompt !== "string" ||
-    !Array.isArray(snapshot.value.gates)) {
-  throw new Error("Failed to load task context and gates for " + id);
+// Claim and context retrieval are separate deterministic host operations.
+const contextResult = await hostCall("agentctl.read", { op: "context", id });
+if (contextResult.exitCode !== 0 || !contextResult.value ||
+    !contextResult.value.task || contextResult.value.task.id !== id ||
+    typeof contextResult.value.prompt !== "string") {
+  throw new Error("Failed to load context for claimed story " + id);
 }
-const assignment = snapshot.value.context.prompt;
-const originalGates = snapshot.value.gates;
-
-// One snapshot contains task context, baseline gates and the models.yaml
-// policy. No additional agentctl calls are needed to select agent roles.
-const policy = snapshot.value.models;
-if (!policy || !policy.roles || typeof policy.roles !== "object" ||
-    !Number.isInteger(policy.repairRetries) || policy.repairRetries < 0 ||
-    policy.repairRetries > 10 || !Number.isInteger(policy.reviewRetries) ||
-    policy.reviewRetries < 0 || policy.reviewRetries > 10) {
-  throw new Error("Invalid model and retry policy returned by agentctl snapshot");
-}
-const maxImplementationAttempts = 1 + policy.repairRetries;
-const maxReviewRounds = 1 + policy.reviewRetries;
-
-// Model and thinking are independently optional. Omitting both inherits Pi's
-// current model and role/Pi effort. Thinking alone uses an Ultracode ":high"
-// suffix, preserving Pi's model selection.
-const modelFor = (role) => !role ? undefined :
-  role.thinking ? (role.model || "") + ":" + role.thinking : role.model;
-const cheapModel = modelFor(policy.roles.worker);
-const strongModel = modelFor(policy.roles.architect);
-const reviewerModel = modelFor(policy.roles.reviewer);
+const assignment = contextResult.value.prompt;
+const originalGatesResult = await hostCall("agentctl.read", { op: "gates" });
+const originalGates = originalGatesResult.value;
 
 const lookup = await agent(
   "Read the supplied claimed story and give a short implementation map: likely source paths, risks and acceptance criteria. " +
