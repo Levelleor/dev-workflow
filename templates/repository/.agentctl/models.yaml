@@ -13,4 +13,6 @@ roles:
 
 # Additional attempts/rounds after the first.
 repairRetries: 2
+# 1-based repair number for switching to the stronger model; 2 preserves the original behaviour.
+escalationThreshold: 2
 reviewRetries: 2

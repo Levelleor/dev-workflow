@@ -50,10 +50,18 @@ if (settings.exitCode !== 0 || !policy || !policy.roles ||
 }
 const repairRetries = policy.repairRetries ?? 2;
 const reviewRetries = policy.reviewRetries ?? 2;
+// 1-based repair number: 1 escalates the first retry; 2 the second.
+// When omitted, preserve the historical last-retry escalation.
+const escalationThreshold = policy.escalationThreshold ?? repairRetries;
 if (!Number.isInteger(repairRetries) || repairRetries < 0 ||
     repairRetries > 10 || !Number.isInteger(reviewRetries) ||
     reviewRetries < 0 || reviewRetries > 10) {
   throw new Error("Retry budgets must be integers between 0 and 10");
+}
+if (!Number.isInteger(escalationThreshold) ||
+    (repairRetries === 0 ? escalationThreshold !== 0 :
+      escalationThreshold < 1 || escalationThreshold > repairRetries)) {
+  throw new Error("escalationThreshold must be a retry number from 1 to repairRetries (or 0 when repairRetries is 0)");
 }
 const maxImplementationAttempts = 1 + repairRetries;
 const maxReviewRounds = 1 + reviewRetries;
@@ -106,9 +114,9 @@ while (reviewRounds < maxReviewRounds) {
   phase("Implement");
   let passed = false;
 
-  // Initial cheap attempt, then bounded repairs; the last retry uses the stronger model.
+  // Initial cheap attempt; use the stronger model from the configured repair onward.
   for (let attempt = 0; attempt < maxImplementationAttempts; attempt++) {
-    const escalated = attempt > 0 && attempt === maxImplementationAttempts - 1;
+    const escalated = attempt > 0 && attempt >= escalationThreshold;
     const model = escalated ? strongModel : cheapModel;
     const prompt =
       "Implement exactly story " + id + ". You own implementation and tests, but NEVER mark the task implemented " +
@@ -157,7 +165,7 @@ while (reviewRounds < maxReviewRounds) {
     feedback = "The implementation is not yet accepted. Previous worker:\n" +
       feedback + "\nVerification output:\n" + JSON.stringify(verified.value) +
       "\nFix every failing check and rerun tests. Do not remove or weaken gates.";
-    if (attempt + 2 === maxImplementationAttempts) {
+    if (attempt + 1 === escalationThreshold) {
       feedback += "\nThe next attempt uses the stronger implementation model.";
     }
   }
