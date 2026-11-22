@@ -51,7 +51,7 @@ describe("restricted pi-ultracode-agentctl-bridge", () => {
       { op: "note-remove", noteId: "N001; echo bad" },
     ]) expect(() => allowedArguments("write", input)).toThrow();
     expect(() => allowedArguments("read", { op: "ls" })).toThrow();
-    expect(() => allowedArguments("read", { op: "models", id: "../../outside" })).toThrow();
+    expect(() => allowedArguments("read", { op: "context", id: "../../outside" })).toThrow();
     expect(() => allowedArguments("verify", { gate: "all; whoami" })).toThrow();
     expect(() => allowedArguments("verify", { command: "sh" })).toThrow();
   });
