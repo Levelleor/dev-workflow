@@ -27,6 +27,7 @@ Usage:
   agentctl task claim <ID|next> [--json]            Claim a task, returning its ID and status
   Example: agentctl task claim next                  Select automatically by priority
   agentctl task getcontext [ID] [--json]            Resume an in-progress task
+  agentctl task snapshot [ID] [--json]              Return task context and verification gates
   agentctl task complete [ID] [--json]              Mark an in-progress task implemented
   agentctl task notes add "text" [--json]            Add a note to the current task
   agentctl task notes list [--json]                  List notes on the current task
@@ -179,13 +180,20 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
         emit(json ? context : context.prompt);
         return 0;
       }
+      if (action === "snapshot") {
+        if (rest.length > 1) throw new Error("Usage: agentctl task snapshot [ID] [--json]");
+        const context = getActiveTaskContext(fs, root, rest[0]);
+        const gates = listGates(fs, root);
+        emit({ context, gates });
+        return 0;
+      }
       if (action === "complete") {
         if (rest.length > 1) throw new Error("Usage: agentctl task complete [ID] [--json]");
         const completed = completeTask(fs, root, rest[0]);
         emit(json ? { id: completed.id, status: completed.status } : `${completed.id} marked implemented. Verification and acceptance are separate.`);
         return 0;
       }
-      throw new Error("Usage: agentctl task claim <ID|next> | task getcontext [ID] | task complete [ID]");
+      throw new Error("Usage: agentctl task claim <ID|next> | task getcontext [ID] | task snapshot [ID] | task complete [ID]");
     }
 
     if (command === "work") {
@@ -226,9 +234,9 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
 
     if (command === "config") {
       if (action === "show") emit(showConfig(fs, root));
-      else if (action === "get") emit(getSetting(fs, root, requireArg(rest[0], "agentctl config get models.roles.worker.model")));
+      else if (action === "get") emit(getSetting(fs, root, requireArg(rest[0], "agentctl config get project.project.id")));
       else if (action === "set") {
-        const key = requireArg(rest[0], "agentctl config set models.roles.worker.thinking high");
+        const key = requireArg(rest[0], "agentctl config set project.orchestration.mode sequential");
         const value = requireArg(rest[1], "agentctl config set KEY VALUE");
         emit({ key, value: setSetting(fs, root, key, value) });
       } else throw new Error("Usage: agentctl config show|get|set");

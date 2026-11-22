@@ -40,11 +40,31 @@ const REVIEW = {
   additionalProperties: false,
 };
 
-const settings = await hostCall("agentctl.read", { op: "models" });
-const roles = settings.value.models.roles;
-const cheapModel = roles.worker.model;
-const strongModel = roles.architect.model;
-const reviewerModel = roles.reviewer.model;
+// Workflow-owned policy. Omit model to use Pi's selected model; omit thinking
+// to inherit the role's thinking level or Pi's current thinking effort.
+const ROLES = {
+  worker: { model: "deepseek/deepseek-flash", thinking: "medium" },
+  architect: { model: "openai/gpt-6.2-sol", thinking: "high" },
+  reviewer: { model: "deepseek/deepseek-flash", thinking: "medium" },
+};
+
+// Retry counts mean *additional* attempts after the first attempt/review.
+const RETRIES = { repairRetries: 2, reviewRetries: 2 };
+if (!Number.isInteger(RETRIES.repairRetries) || RETRIES.repairRetries < 0 ||
+    RETRIES.repairRetries > 10 || !Number.isInteger(RETRIES.reviewRetries) ||
+    RETRIES.reviewRetries < 0 || RETRIES.reviewRetries > 10) {
+  throw new Error("Retry budgets must be integers between 0 and 10");
+}
+const maxImplementationAttempts = 1 + RETRIES.repairRetries;
+const maxReviewRounds = 1 + RETRIES.reviewRetries;
+
+// Ultracode accepts effort as a suffix (":high" keeps Pi's selected model).
+// An undefined model deliberately delegates both choices to Pi/the agent role.
+const modelFor = (role) =>
+  role.thinking ? (role.model || "") + ":" + role.thinking : role.model;
+const cheapModel = modelFor(ROLES.worker);
+const strongModel = modelFor(ROLES.architect);
+const reviewerModel = modelFor(ROLES.reviewer);
 
 phase("Claim");
 const requested = args && args.taskId ? args.taskId : "next";
@@ -54,16 +74,16 @@ if (claim.exitCode !== 0) {
   return { status: "unavailable", reason: claim.value };
 }
 const id = claim.value.task.id;
-// Claim and context retrieval are separate deterministic host operations.
-const contextResult = await hostCall("agentctl.read", { op: "context", id });
-if (contextResult.exitCode !== 0 || !contextResult.value ||
-    !contextResult.value.task || contextResult.value.task.id !== id ||
-    typeof contextResult.value.prompt !== "string") {
-  throw new Error("Failed to load context for claimed story " + id);
+// One read-only CLI call obtains both the task context and baseline gates.
+const snapshot = await hostCall("agentctl.read", { op: "snapshot", id });
+if (snapshot.exitCode !== 0 || !snapshot.value || !snapshot.value.context ||
+    !snapshot.value.context.task || snapshot.value.context.task.id !== id ||
+    typeof snapshot.value.context.prompt !== "string" ||
+    !Array.isArray(snapshot.value.gates)) {
+  throw new Error("Failed to load task context and gates for " + id);
 }
-const assignment = contextResult.value.prompt;
-const originalGatesResult = await hostCall("agentctl.read", { op: "gates" });
-const originalGates = originalGatesResult.value;
+const assignment = snapshot.value.context.prompt;
+const originalGates = snapshot.value.gates;
 
 const lookup = await agent(
   "Read the supplied claimed story and give a short implementation map: likely source paths, risks and acceptance criteria. " +
@@ -81,25 +101,25 @@ let reviewRounds = 0;
 let verified = null;
 let latestImplementation = null;
 
-while (reviewRounds < 3) {
+while (reviewRounds < maxReviewRounds) {
   reviewRounds++;
   phase("Implement");
-  let model = cheapModel;
-  let repairAttempt = 0;
   let passed = false;
 
-  // One initial cheap attempt, one cheap repair, then one stronger attempt.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt === 2) model = strongModel;
+  // Initial cheap attempt, then bounded repairs; the last retry uses the stronger model.
+  for (let attempt = 0; attempt < maxImplementationAttempts; attempt++) {
+    const escalated = attempt > 0 && attempt === maxImplementationAttempts - 1;
+    const model = escalated ? strongModel : cheapModel;
     const prompt =
       "Implement exactly story " + id + ". You own implementation and tests, but NEVER mark the task implemented " +
       "and NEVER create a pull request. You may register necessary new verification gates using agentctl verify add, " +
       "and leave task notes. Preserve all existing gates. Report actual changes and remaining blockers. " +
       "Run targeted tests as needed; a separate trusted gate run determines pass/fail.\n\n" +
       "Task context:\n" + assignment + "\n\nFeedback:\n" + feedback +
-      "\nAttempt: " + (attempt + 1) + " of 3 in review round " + reviewRounds + ".";
+      "\nAttempt: " + (attempt + 1) + " of " + maxImplementationAttempts +
+      " in review round " + reviewRounds + ".";
     const implementation = await agent(prompt, {
-      label: attempt === 2 ? "strong implementation" : attempt === 1 ? "cheap repair" : "cheap implementation",
+      label: escalated ? "strong implementation" : attempt === 0 ? "cheap implementation" : "cheap repair",
       phase: "Implement",
       model,
       agentType: "agentctl-implementer",
@@ -134,16 +154,17 @@ while (reviewRounds < 3) {
       passed = true;
       break;
     }
-    repairAttempt++;
     feedback = "The implementation is not yet accepted. Previous worker:\n" +
       feedback + "\nVerification output:\n" + JSON.stringify(verified.value) +
       "\nFix every failing check and rerun tests. Do not remove or weaken gates.";
-    if (attempt === 1) feedback += "\nYou are being escalated to the stronger implementation model.";
+    if (attempt + 2 === maxImplementationAttempts) {
+      feedback += "\nThe next attempt uses the stronger implementation model.";
+    }
   }
 
   if (!passed) {
     return {
-      status: "escalated", id, reason: "Implementation or verification failed after cheap retry and strong escalation",
+      status: "escalated", id, reason: "Implementation or verification failed after " + maxImplementationAttempts + " attempt(s)",
       reviewRounds, verification: verified && verified.value, implementation: latestImplementation,
     };
   }
@@ -163,8 +184,8 @@ while (reviewRounds < 3) {
   if (!verdict || !verdict.approved) {
     const reason = verdict ? verdict.summary + "\n" + verdict.findings.join("\n") : "Reviewer failed to return a verdict.";
     await hostCall("agentctl.write", { op: "note-add", id, text: ("Review round " + reviewRounds + ": " + reason).slice(0, 3900) });
-    if (reviewRounds === 3) {
-      return { status: "escalated", id, reason: "Rejected at the maximum of three review rounds",
+    if (reviewRounds === maxReviewRounds) {
+      return { status: "escalated", id, reason: "Rejected after " + maxReviewRounds + " review round(s)",
         reviewRounds, findings: verdict ? verdict.findings : ["No valid verdict"], verification: verified.value };
     }
     feedback = "Independent reviewer rejected the current implementation. Address these exact findings:\n" +
@@ -186,7 +207,7 @@ while (reviewRounds < 3) {
   const finalCheck = await hostCall("agentctl.verify", {});
   if (!finalCheck.value.passed || finalCheck.exitCode !== 0) {
     feedback = "Final verification failed after reviewer approval: " + JSON.stringify(finalCheck.value);
-    if (reviewRounds === 3) {
+    if (reviewRounds === maxReviewRounds) {
       return { status: "escalated", id, reason: feedback, reviewRounds };
     }
     continue;

@@ -29,7 +29,7 @@ jobs:
           tmp="$(mktemp -d)"
           node packages/cli/dist/index.js init "$tmp"
           test -f "$tmp/.agentctl/project.yaml"
-          test -f "$tmp/.agentctl/models.yaml"
+          test ! -e "$tmp/.agentctl/models.yaml"
           (cd "$tmp" && node "$GITHUB_WORKSPACE/packages/cli/dist/index.js" doctor)
           cli="$GITHUB_WORKSPACE/packages/cli/dist/index.js"
           (cd "$tmp" && node "$cli" knowledge add --type prd --title "Smoke product")
@@ -41,6 +41,8 @@ jobs:
             echo "Claim returned context unexpectedly"
             exit 1
           fi
+          (cd "$tmp" && node "$cli" task snapshot STORY-0002 --json > "$tmp/snapshot.json")
+          node -e 'const d=require(process.argv[1]); if (d.context.task.id !== "STORY-0002" || !Array.isArray(d.gates)) process.exit(1)' "$tmp/snapshot.json"
           (cd "$tmp" && node "$cli" task getcontext STORY-0002 > "$tmp/resumed-prompt.md")
           grep -q "Explicitly selected" "$tmp/resumed-prompt.md"
           grep -q "Smoke product" "$tmp/resumed-prompt.md"

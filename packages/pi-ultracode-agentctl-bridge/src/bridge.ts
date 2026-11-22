@@ -81,11 +81,11 @@ export function allowedArguments(kind: "read" | "write" | "verify", input: unkno
   }
   const data = shape(input, kind === "read" ? ["op", "id"] : ["op", "id", "text", "noteId"]);
   const op = operation(data.op,
-    kind === "read" ? ["list", "context", "models", "gates", "notes"] :
+    kind === "read" ? ["list", "context", "snapshot", "gates", "notes"] :
       ["claim", "complete", "note-add", "note-remove"]);
   if (kind === "read") {
     if (op === "list") return ["work", "list", "--json"];
-    if (op === "models") return ["config", "show", "--json"];
+    if (op === "snapshot") return ["task", "snapshot", ...optionalId(data.id), "--json"];
     if (op === "gates") return ["verify", "list", "--json"];
     if (op === "context") return ["task", "getcontext", ...optionalId(data.id), "--json"];
     return ["task", ...optionalId(data.id), "notes", "list", "--json"];
@@ -118,7 +118,7 @@ export const execAgentctl: Executor = (args, cwd, signal, timeoutMs) => new Prom
 const READ_SCHEMA = {
   type: "object",
   properties: {
-    op: { type: "string", enum: ["list", "context", "models", "gates", "notes"] },
+    op: { type: "string", enum: ["list", "context", "snapshot", "gates", "notes"] },
     id: { type: "string" },
   },
   required: ["op"],
@@ -147,7 +147,7 @@ export function createAgentctlCapabilities(executor: Executor = execAgentctl): C
     kind: "read" | "write" | "verify",
   ): CapabilityDefinition {
     return {
-      name, version: "1", effect, timeoutMs, inputSchema: schema,
+      name, version: kind === "read" ? "2" : "1", effect, timeoutMs, inputSchema: schema,
       async execute(input, context) {
         const argv = allowedArguments(kind, input);
         // This cwd is supplied by Ultracode for a trusted project, never by the workflow.

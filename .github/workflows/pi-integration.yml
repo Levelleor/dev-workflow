@@ -38,7 +38,7 @@ jobs:
           "$RUNNER_TEMP/pi-ultracode/node_modules/.bin/pi" --version
           cp tests/pi-integration.test.ts "$RUNNER_TEMP/pi-ultracode/test/agentctl-bridge-integration.test.ts"
           cd "$RUNNER_TEMP/pi-ultracode"
-          AGENTCTL_BRIDGE_JS="$GITHUB_WORKSPACE/packages/runtime-ultracode/dist/bridge.js" \
+          AGENTCTL_BRIDGE_JS="$GITHUB_WORKSPACE/packages/pi-ultracode-agentctl-bridge/dist/bridge.js" \
           AGENTCTL_CLI_JS="$GITHUB_WORKSPACE/packages/cli/dist/index.js" \
           AGENTCTL_WORKFLOW_FILE="$GITHUB_WORKSPACE/.pi/ultracode/workflows/agentctl-sequential-feature.workflow.js" \
           AGENTCTL_ROLES_DIR="$GITHUB_WORKSPACE/.pi/ultracode/agents" \

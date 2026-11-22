@@ -8,6 +8,6 @@ The root uses **npm workspaces**. The `@levelleor/agentctl` CLI builds and runs,
 | [`core/`](core/README.md) | Shared types, lifecycle contracts, policy and configuration schemas |
 | [`knowledge/`](knowledge/README.md) | Repository-backed records, ID/link validation and context assembly |
 | [`verification/`](verification/README.md) | Trusted check profiles, receipts and verification adapters |
-| [`runtime-ultracode/`](runtime-ultracode/README.md) | Adapter between the control-plane contracts and Ultracode |
+| [`pi-ultracode-agentctl-bridge/`](pi-ultracode-agentctl-bridge/README.md) | Scoped agentctl host capabilities registered with Ultracode |
 
 Package boundaries are provisional; record a decision before coupling knowledge storage to runtime orchestration or duplicating a workflow scheduler.

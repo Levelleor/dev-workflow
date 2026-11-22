@@ -47,10 +47,10 @@ async function project(run: (cwd: string) => Promise<void>) {
   }
 }
 
-function journal(cwd: string) {
+function journal(cwd: string, source = workflow) {
   const header = {
     type: "run" as const, runId: "agentctl-sequential-test",
-    name: "agentctl-sequential-feature", scriptHash: hashString(workflow),
+    name: "agentctl-sequential-feature", scriptHash: hashString(source),
     targetIdentity: resolveRepositoryContext(cwd).identity,
     projectTrusted: true, startedAt: Date.now(),
   };
@@ -120,11 +120,11 @@ function registeredWithPi() {
   return collected;
 }
 
-async function execute(cwd: string, behaviour: Parameters<typeof fakeRunner>[1] = {}) {
-  const handle = journal(cwd);
+async function execute(cwd: string, behaviour: Parameters<typeof fakeRunner>[1] = {}, source = workflow) {
+  const handle = journal(cwd, source);
   const fake = fakeRunner(cwd, behaviour);
   try {
-    const result = await runWorkflow(workflow, {
+    const result = await runWorkflow(source, {
       cwd, args: { taskId: "next" }, projectTrusted: true,
       hostCapabilities: registeredWithPi(),
       hostCapabilityGrants: ["agentctl.read", "agentctl.write", "agentctl.verify"],
@@ -152,6 +152,8 @@ test("real Ultracode workflow claims through CLI, verifies, reviews and complete
     assert.equal(result.result.reviewRounds, 1);
     assert.match(result.calls.find((call) => call.label === "cheap implementation")!.prompt, /E2E requirement/);
     assert.ok(result.calls.some((call) => call.label === "independent review"));
+    assert.ok(result.calls.find((call) => call.label === "cheap task lookup")!.modelPattern?.endsWith(":medium"));
+    assert.ok(result.calls.find((call) => call.label === "independent review")!.modelPattern?.endsWith(":medium"));
     assert.ok(result.calls.some((call) => call.label === "publish accepted PR"));
     assert.match(fs.readFileSync(path.join(cwd, "docs/work/items/STORY-0001-implement-e2e.md"), "utf8"), /status: implemented/);
   });
@@ -169,6 +171,7 @@ test("Pi workflow uses exactly one cheap retry then the stronger model", async (
     assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label),
       ["cheap implementation", "cheap repair", "strong implementation"]);
     assert.ok(calls.find((call) => call.label === "strong implementation")!.modelPattern?.includes("gpt"));
+    assert.ok(calls.find((call) => call.label === "strong implementation")!.modelPattern?.endsWith(":high"));
   });
 });
 
@@ -193,5 +196,99 @@ test("Pi workflow stops after exhausted verification escalation", async () => {
     assert.equal(result.status, "escalated");
     assert.equal(calls.filter((c) => /implementation|repair/.test(c.label)).length, 3);
     assert.equal(calls.filter((c) => c.label === "independent review").length, 0);
+  });
+});
+
+test("omitting thinking inherits the role/Pi thinking effort without a suffix", async () => {
+  await project(async (cwd) => {
+    const source = workflow.replace(
+      'worker: { model: "deepseek/deepseek-flash", thinking: "medium" }',
+      'worker: { model: "deepseek/deepseek-flash" }',
+    );
+    assert.notEqual(source, workflow);
+    const { result, calls } = await execute(cwd, {}, source);
+    assert.equal(result.status, "implemented");
+    assert.equal(calls.find((call) => call.label === "cheap implementation")!.modelPattern, "deepseek/deepseek-flash");
+  });
+});
+
+test("omitting model and thinking delegates selection to Pi", async () => {
+  await project(async (cwd) => {
+    const source = workflow.replace(
+      'worker: { model: "deepseek/deepseek-flash", thinking: "medium" }',
+      "worker: {}",
+    );
+    assert.notEqual(source, workflow);
+    const { result, calls } = await execute(cwd, {}, source);
+    assert.equal(result.status, "implemented");
+    assert.equal(calls.find((call) => call.label === "cheap implementation")!.modelPattern, undefined);
+  });
+});
+
+test("thinking without an explicit model overrides effort only", async () => {
+  await project(async (cwd) => {
+    const source = workflow.replace(
+      'worker: { model: "deepseek/deepseek-flash", thinking: "medium" }',
+      'worker: { thinking: "high" }',
+    );
+    assert.notEqual(source, workflow);
+    const { result, calls } = await execute(cwd, {}, source);
+    assert.equal(result.status, "implemented");
+    assert.equal(calls.find((call) => call.label === "cheap implementation")!.modelPattern, ":high");
+  });
+});
+
+test("repairRetries zero permits only the initial implementation attempt", async () => {
+  await project(async (cwd) => {
+    fs.writeFileSync(path.join(cwd, ".agentctl/checks.yaml"), [
+      "checks:", "  fail:", "    command: node -e 'process.exit(1)'",
+      "    timeoutSeconds: 10", "profiles:", "  scaffold: [fail]", "",
+    ].join("\n"));
+    const source = workflow.replace("repairRetries: 2", "repairRetries: 0");
+    assert.notEqual(source, workflow);
+    const { result, calls } = await execute(cwd, {}, source);
+    assert.equal(result.status, "escalated");
+    assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label), [
+      "cheap implementation",
+    ]);
+  });
+});
+
+test("repairRetries one escalates the only retry to the stronger model", async () => {
+  await project(async (cwd) => {
+    fs.writeFileSync(path.join(cwd, ".agentctl/checks.yaml"), [
+      "checks:", "  dynamic:",
+      "    command: " + JSON.stringify(`node -e "process.exit(require('fs').existsSync('passed.flag') ? 0 : 1)"`),
+      "    timeoutSeconds: 10", "profiles:", "  scaffold: [dynamic]", "",
+    ].join("\n"));
+    const source = workflow.replace("repairRetries: 2", "repairRetries: 1");
+    assert.notEqual(source, workflow);
+    const { result, calls } = await execute(cwd, { repairAt: 2 }, source);
+    assert.equal(result.status, "implemented");
+    assert.deepEqual(calls.filter((call) => /implementation|repair/.test(call.label)).map((call) => call.label), [
+      "cheap implementation", "strong implementation",
+    ]);
+  });
+});
+
+test("reviewRetries zero ends after the first independent rejection", async () => {
+  await project(async (cwd) => {
+    const source = workflow.replace("reviewRetries: 2", "reviewRetries: 0");
+    assert.notEqual(source, workflow);
+    const { result, calls } = await execute(cwd, { reviewerRejections: 1 }, source);
+    assert.equal(result.status, "escalated");
+    assert.equal(result.reviewRounds, 1);
+    assert.equal(calls.filter((call) => call.label === "independent review").length, 1);
+  });
+});
+
+test("reviewRetries one permits a second round after a rejection", async () => {
+  await project(async (cwd) => {
+    const source = workflow.replace("reviewRetries: 2", "reviewRetries: 1");
+    assert.notEqual(source, workflow);
+    const { result, calls } = await execute(cwd, { reviewerRejections: 1 }, source);
+    assert.equal(result.status, "implemented");
+    assert.equal(result.reviewRounds, 2);
+    assert.equal(calls.filter((call) => call.label === "independent review").length, 2);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli.js";
 import { fixture } from "./fixtures.js";
+import { addRecord } from "../src/records.js";
+import { claimTask } from "../src/task.js";
 
 describe("CLI interface", () => {
   it("exposes usage and version without a repository", () => {
@@ -39,6 +41,26 @@ describe("CLI interface", () => {
     expect(runCli(["work", "add", "--title", "Create a board", "--parent", "PRD-0001"], opts)).toBe(0);
     expect(runCli(["work", "list"], opts)).toBe(0);
     expect(output.at(-1)).toContain("STORY-0001");
+  });
+
+  it("returns task context and gate policy together in one read-only snapshot", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const prd = addRecord(fs, "/repo", { type: "prd", title: "Product" });
+    const story = addRecord(fs, "/repo", { type: "story", title: "Implement feature", parent: prd.id });
+    expect(claimTask(fs, "/repo", story.id).ok).toBe(true);
+    const output: string[] = [];
+    const errors: string[] = [];
+    const opts = { fs, cwd: "/repo", output: (value: string) => output.push(value), error: (value: string) => errors.push(value) };
+    expect(runCli(["task", "snapshot", story.id, "--json"], opts)).toBe(0);
+    const snapshot = JSON.parse(output[0]);
+    expect(snapshot.context.task.id).toBe(story.id);
+    expect(snapshot.context.prompt).toContain("Product");
+    expect(snapshot.gates).toEqual([{ name: "scaffold", command: "npm test", timeoutSeconds: 5, required: true }]);
+    expect(runCli(["task", "snapshot", "STORY-9999", "--json"], opts)).toBe(1);
+    expect(errors.at(-1)).toMatch(/not in progress/);
+    expect(runCli(["task", "snapshot", story.id, "extra", "--json"], opts)).toBe(1);
+    expect(errors.at(-1)).toMatch(/Usage/);
   });
 
   it("returns a nonzero exit status on unconfigured verification", () => {

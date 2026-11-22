@@ -10,7 +10,7 @@ The first functional component is **agentctl**, a TypeScript CLI for repository 
 - [`packages/core/`](packages/core/README.md): planned shared contracts and policy.
 - [`packages/knowledge/`](packages/knowledge/README.md): planned storage adapter.
 - [`packages/verification/`](packages/verification/README.md): planned trusted verifier.
-- [`packages/runtime-ultracode/`](packages/runtime-ultracode/README.md): planned Ultracode adapter.
+- [`packages/pi-ultracode-agentctl-bridge/`](packages/pi-ultracode-agentctl-bridge/README.md): Pi extension exposing scoped agentctl host capabilities.
 - [`agents/`](agents/README.md): portable role contracts.
 - [`workflows/`](workflows/feature.md): intended sequential feature lifecycle.
 - [`templates/`](templates/README.md): portable repository and record templates.

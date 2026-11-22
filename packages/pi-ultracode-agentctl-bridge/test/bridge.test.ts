@@ -16,6 +16,9 @@ describe("restricted pi-ultracode-agentctl-bridge", () => {
       "task", "STORY-0002", "notes", "add", "Fix timeout", "--json",
     ]);
     expect(allowedArguments("read", { op: "context", id: "STORY-0002" })).toEqual(["task", "getcontext", "STORY-0002", "--json"]);
+    expect(allowedArguments("read", { op: "snapshot", id: "STORY-0002" })).toEqual(["task", "snapshot", "STORY-0002", "--json"]);
+    expect(allowedArguments("read", { op: "snapshot" })).toEqual(["task", "snapshot", "--json"]);
+    expect(() => allowedArguments("read", { op: "models" })).toThrow();
     expect(allowedArguments("read", { op: "list" })).toEqual(["work", "list", "--json"]);
     expect(allowedArguments("verify", {})).toEqual(["verify", "--json"]);
     expect(allowedArguments("verify", { gate: "unit" })).toEqual(["verify", "unit", "--json"]);
@@ -30,6 +33,7 @@ describe("restricted pi-ultracode-agentctl-bridge", () => {
       { op: "note-remove", noteId: "N001; echo bad" },
     ]) expect(() => allowedArguments("write", input)).toThrow();
     expect(() => allowedArguments("read", { op: "ls" })).toThrow();
+    expect(() => allowedArguments("read", { op: "snapshot", id: "../../outside" })).toThrow();
     expect(() => allowedArguments("verify", { gate: "all; whoami" })).toThrow();
     expect(() => allowedArguments("verify", { command: "sh" })).toThrow();
   });
