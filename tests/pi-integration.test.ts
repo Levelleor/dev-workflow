@@ -187,6 +187,9 @@ test("Pi workflow rejects weakened gate commands and timeouts without a required
   for (const weakenGate of ["command", "timeout"] as const) {
     await project(async (cwd) => {
       const { result, calls } = await execute(cwd, { weakenGate });
+      const gates = JSON.parse(cli(cwd, ["verify", "list", "--json"]));
+      assert.equal(gates.length, 1);
+      console.log("gate mutation diagnostic", weakenGate, gates[0], result);
       assert.equal(result.status, "escalated");
       assert.match(result.reason, /Verification policy was weakened or removed/);
       assert.equal(calls.filter((call) => /implementation|repair/.test(call.label)).length, 1);
