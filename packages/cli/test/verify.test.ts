@@ -18,6 +18,7 @@ describe("deterministic verification gates", () => {
     expect(result.selection).toBe("all");
     expect(result.passed).toBe(false);
     expect(result.checks.map((gate) => gate.name)).toEqual(["browser", "scaffold"]);
+    expect(result.checks.every((gate) => !Object.hasOwn(gate, "required"))).toBe(true);
     expect(result.checks[0]).toMatchObject({
       exitCode: 1, passed: false, stderr: "One browser test failed",
     });
@@ -73,13 +74,27 @@ describe("deterministic verification gates", () => {
     const { fs, initialize } = fixture();
     initialize();
     const gate = addGate(fs, "/repo", "unit", "npm test", 30);
-    expect(gate).toMatchObject({ name: "unit", command: "npm test", timeoutSeconds: 30 });
+    expect(gate).toEqual({ name: "unit", command: "npm test", timeoutSeconds: 30 });
     const config = fs.readFileSync("/repo/.agentctl/checks.yaml", "utf8");
     expect(config).toContain("scaffold:");
     expect(config).toContain("feature: []");
+    expect(config).not.toMatch(/\brequired\s*:/);
     expect(listGates(fs, "/repo").map((gate) => gate.name)).toEqual(["scaffold", "unit"]);
     expect(() => addGate(fs, "/repo", "unit", "echo skip")).toThrow(/already exists/);
     expect(fs.readFileSync("/repo/.agentctl/checks.yaml", "utf8")).toBe(config);
+  });
+
+  it("rejects obsolete required flags rather than implying optional checks", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const filename = "/repo/.agentctl/checks.yaml";
+    const original = fs.readFileSync(filename, "utf8");
+    for (const required of ["true", "false"]) {
+      fs.writeFileSync(filename, original.replace("command: npm test",
+        `command: npm test\n    required: ${required}`));
+      expect(() => listGates(fs, "/repo")).toThrow(/removed 'required' setting/);
+      expect(() => verify(fs, "/repo", "all", () => outcome(0))).toThrow(/removed 'required' setting/);
+    }
   });
 
   it("rejects unsafe names, invalid commands and invalid timeouts", () => {

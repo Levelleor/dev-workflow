@@ -3,7 +3,6 @@
 checks:
   scaffold:
     command: npm test
-    required: true
     timeoutSeconds: 120
 
 profiles:

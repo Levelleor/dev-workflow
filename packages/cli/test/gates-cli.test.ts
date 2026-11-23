@@ -16,11 +16,13 @@ describe("verification CLI", () => {
     });
     expect(run(["verify", "add", "browser", "--timeout", "600", "--json", "--",
       "npx", "playwright", "test", "--headed"])).toBe(0);
-    expect(JSON.parse(output.at(-1)!)).toMatchObject({
+    expect(JSON.parse(output.at(-1)!)).toEqual({
       name: "browser", command: "npx playwright test --headed", timeoutSeconds: 600,
     });
     expect(run(["verify", "list", "--json"])).toBe(0);
-    expect(JSON.parse(output.at(-1)!).map((g: { name: string }) => g.name)).toEqual(["browser", "scaffold"]);
+    const listed = JSON.parse(output.at(-1)!);
+    expect(listed.map((g: { name: string }) => g.name)).toEqual(["browser", "scaffold"]);
+    expect(listed.every((gate: Record<string, unknown>) => !Object.hasOwn(gate, "required"))).toBe(true);
     expect(run(["verify", "browser", "--json"])).toBe(0);
     const result = JSON.parse(output.at(-1)!);
     expect(result.checks[0]).toMatchObject({

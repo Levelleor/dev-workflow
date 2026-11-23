@@ -6,7 +6,7 @@ import type { FileSystem } from "./fs.js";
 import { writeFileAtomically } from "./fs.js";
 import { readYaml } from "./project.js";
 
-export type Gate = { name: string; command: string; timeoutSeconds: number; required: boolean };
+export type Gate = { name: string; command: string; timeoutSeconds: number };
 export type CommandOutcome = {
   exitCode: number | null;
   stdout: string;
@@ -57,13 +57,12 @@ function namedGates(fs: FileSystem, root: string): Map<string, Gate> {
     if (typeof timeoutSeconds !== "number" || !Number.isInteger(timeoutSeconds) || timeoutSeconds < 1) {
       throw new Error(`Invalid timeout for gate '${name}'.`);
     }
-    if (spec.required !== undefined && typeof spec.required !== "boolean") {
-      throw new Error(`Invalid required flag for gate '${name}'.`);
+    // All registered gates are mandatory. Reject the removed flag rather than
+    // silently interpreting an obsolete "required: false" as optional.
+    if (Object.hasOwn(spec, "required")) {
+      throw new Error(`Gate '${name}' uses the removed 'required' setting; all gates are mandatory.`);
     }
-    result.set(name, {
-      name, command: spec.command, timeoutSeconds,
-      required: spec.required !== false,
-    });
+    result.set(name, { name, command: spec.command, timeoutSeconds });
   }
   return result;
 }
@@ -90,9 +89,9 @@ export function addGate(
   if (document.errors.length || !isMap(document.get("checks", true))) {
     throw new Error("Cannot update invalid verification configuration.");
   }
-  document.setIn(["checks", name], { command, timeoutSeconds, required: true });
+  document.setIn(["checks", name], { command, timeoutSeconds });
   writeFileAtomically(fs, file, document.toString());
-  return { name, command, timeoutSeconds, required: true };
+  return { name, command, timeoutSeconds };
 }
 
 export function verify(

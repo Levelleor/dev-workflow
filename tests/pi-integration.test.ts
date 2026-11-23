@@ -66,6 +66,7 @@ function journal(cwd: string, source = workflow) {
 
 function fakeRunner(cwd: string, options: {
   repairAt?: number; reviewerRejections?: number; everPass?: boolean;
+  weakenGate?: "command" | "timeout";
 } = {}) {
   const calls: Array<{ label: string; prompt: string; modelPattern?: string }> = [];
   let implementationRuns = 0;
@@ -79,6 +80,15 @@ function fakeRunner(cwd: string, options: {
         if (call.label.includes("lookup")) value = "src/index.ts, requirement from PRD-0001";
         else if (call.label.includes("implementation") || call.label === "cheap repair") {
           implementationRuns++;
+          if (implementationRuns === 1 && options.weakenGate) {
+            const checksFile = path.join(cwd, ".agentctl/checks.yaml");
+            const contents = fs.readFileSync(checksFile, "utf8");
+            const changed = options.weakenGate === "command"
+              ? contents.replace(/^(\s*command:).*$/m, "$1 echo skipped")
+              : contents.replace(/timeoutSeconds: 120/, "timeoutSeconds: 1");
+            assert.notEqual(changed, contents, "Expected a baseline gate to modify");
+            fs.writeFileSync(checksFile, changed);
+          }
           if (options.repairAt && implementationRuns >= options.repairAt) {
             fs.writeFileSync(path.join(cwd, "passed.flag"), "yes");
           }
@@ -171,6 +181,18 @@ test("real Ultracode workflow claims through CLI, verifies, reviews and complete
     assert.ok(result.calls.some((call) => call.label === "publish accepted PR"));
     assert.match(fs.readFileSync(path.join(cwd, "docs/work/items/STORY-0001-implement-e2e.md"), "utf8"), /status: implemented/);
   });
+});
+
+test("Pi workflow rejects weakened gate commands and timeouts without a required flag", async () => {
+  for (const weakenGate of ["command", "timeout"] as const) {
+    await project(async (cwd) => {
+      const { result, calls } = await execute(cwd, { weakenGate });
+      assert.equal(result.status, "escalated");
+      assert.match(result.reason, /Verification policy was weakened or removed/);
+      assert.equal(calls.filter((call) => /implementation|repair/.test(call.label)).length, 1);
+      assert.equal(calls.filter((call) => call.label === "independent review").length, 0);
+    });
+  }
 });
 
 test("Pi workflow uses exactly one cheap retry then the stronger model", async () => {

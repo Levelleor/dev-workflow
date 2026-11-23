@@ -149,7 +149,7 @@ while (reviewRounds < maxReviewRounds) {
     for (const original of originalGates) {
       const current = currentGates.find((entry) => entry.name === original.name);
       if (!current || current.command !== original.command ||
-          current.timeoutSeconds < original.timeoutSeconds || (original.required && !current.required)) {
+          current.timeoutSeconds < original.timeoutSeconds) {
         policyValid = false;
       }
     }
@@ -207,7 +207,7 @@ while (reviewRounds < maxReviewRounds) {
   for (const baseline of originalGates) {
     const current = finalGatesResult.value.find((g) => g.name === baseline.name);
     if (!current || current.command !== baseline.command ||
-        current.timeoutSeconds < baseline.timeoutSeconds || (baseline.required && !current.required)) changed = true;
+        current.timeoutSeconds < baseline.timeoutSeconds) changed = true;
   }
   if (changed) {
     return { status: "escalated", id, reason: "Verification gate changed during review", reviewRounds };
