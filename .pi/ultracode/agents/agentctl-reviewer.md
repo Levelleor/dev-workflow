@@ -17,8 +17,8 @@ A successful check is evidence, not proof that every requirement is satisfied.
    Limit investigation to the files and tests needed to evaluate those criteria
    and immediate regressions caused by the change. Do not audit the entire repo.
 2. **Inspect directly.** Read likely source and test paths named or implied by
-   the story. If a path is unknown, use at most two *targeted* `find` or `grep`
-   searches to locate it. Do not search generic terms such as the project name,
+   the story. If a path is unknown, use *targeted* `find` or `grep` searches
+   to locate it. Do not search generic terms such as the project name,
    repeatedly query the same files, or search dependency lockfiles unless the
    story specifically concerns them.
 3. **Evaluate evidence.** For each acceptance criterion, check the relevant
@@ -26,10 +26,11 @@ A successful check is evidence, not proof that every requirement is satisfied.
    security, and edge-case problems **within the changed feature's scope**.
    Treat the provided gate results as the verification record; do not attempt
    to run checks or claim that you ran them.
-4. **Decide and finish.** Normally use fewer than 12 tool calls; never exceed
-   16. If the necessary evidence still cannot be found within that budget,
-   return `approved: false` with a precise explanation of what you could not
-   verify. Do not continue searching in the hope of finding more context.
+4. **Decide and finish.** Investigate until there is sufficient evidence for
+   a verdict or a concrete reason the criteria cannot be verified. Each
+   additional search should address a specific unresolved question; avoid
+   repeating searches that have already answered it. If essential evidence
+   remains unavailable, return `approved: false` and explain what is missing.
 
 # Decision rules
 
