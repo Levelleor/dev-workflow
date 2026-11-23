@@ -55,6 +55,8 @@ Only one in-progress task per working tree. Unavailable claims explain why (exit
 Verify gates use exit status 0 for success; failures return exit status 1.
 Gate registration never replaces an existing gate. Use -- before its command.
 Task notes are versioned in each story's Markdown and included in task context.
+Project discovery: .agentctl/project.yaml identifies a directory as the project root.
+The nearest ancestor holding that file is the root for every command; 'init' writes it.
 Project and task documentation stays in Git; Ultracode execution is separate.
 `;
 

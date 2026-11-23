@@ -13,6 +13,15 @@ describe("CLI interface", () => {
     expect(output.join("\n")).toContain("0.1.0");
   });
 
+  it("explains project discovery in help", () => {
+    const output: string[] = [];
+    const { fs } = fixture();
+    expect(runCli(["--help"], { fs, cwd: "/repo", output: (value) => output.push(value) })).toBe(0);
+    const text = output.join("\n");
+    expect(text).toContain(".agentctl/project.yaml identifies a directory as the project root");
+    expect(text).toContain("nearest ancestor");
+  });
+
   it("initialises an absolute target directory", () => {
     const { fs } = fixture();
     const output: string[] = [];
