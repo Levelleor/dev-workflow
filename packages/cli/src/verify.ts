@@ -102,11 +102,23 @@ export function verify(
   const gates = namedGates(fs, root);
   let names: string[];
   if (mode === "profile") {
-    const policy = readYaml(fs, join(root, ".agentctl", "checks.yaml"));
-    const profiles = policy.profiles as Record<string, unknown> | undefined;
+    const config = readYaml(fs, join(root, ".agentctl", "checks.yaml"));
+    const policy = config.policy;
+    if (policy !== undefined &&
+        (!policy || typeof policy !== "object" || Array.isArray(policy))) {
+      throw new Error("Verification policy must be a YAML mapping.");
+    }
+    // Missing policies retain the historical fail-closed behaviour.
+    // Only "block" is supported: no configuration may silently pass zero gates.
+    const onUnconfigured = policy && Object.hasOwn(policy, "unconfiguredProfile")
+      ? (policy as Record<string, unknown>).unconfiguredProfile : "block";
+    if (onUnconfigured !== "block") {
+      throw new Error("policy.unconfiguredProfile must be 'block'.");
+    }
+    const profiles = config.profiles as Record<string, unknown> | undefined;
     const selected = profiles?.[target];
     if (!Array.isArray(selected) || selected.length === 0) {
-      throw new Error(`Verification profile '${target}' is missing or empty. No checks were run.`);
+      throw new Error(`Verification profile '${target}' is missing or empty. No checks were run (policy.unconfiguredProfile: block).`);
     }
     if (selected.some((name) => typeof name !== "string")) {
       throw new Error(`Invalid verification profile '${target}'.`);

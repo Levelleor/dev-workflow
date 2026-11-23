@@ -1,10 +1,6 @@
-schemaVersion: 1
 checks: {}
 profiles:
   feature: []
   release: []
 policy:
-  missingRequiredCheck: block
   unconfiguredProfile: block
-  workerMayChangePolicy: false
-  bindEvidenceToRevision: true
