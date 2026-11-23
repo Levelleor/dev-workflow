@@ -182,8 +182,11 @@ while (reviewRounds < maxReviewRounds) {
   // and externally verified result. Role tools are read-only.
   const verdict = await agent(
     "Independently review story " + id + " in the working tree. Do not edit code or task state. " +
-    "Validate every acceptance criterion, test coverage, regressions, code quality, security and edge cases. " +
-    "Return approved:true ONLY when there are no material findings. " +
+    "Focus on the story's acceptance criteria and directly relevant source and tests; avoid broad repository searches. " +
+    "Use the supplied verification evidence rather than rerunning checks. " +
+    "Return approved:true only when every criterion has sufficient evidence and no material issues remain. " +
+    "If evidence is missing, name precisely what is missing and return approved:false rather than searching indefinitely. " +
+    "Finish with the structured fields approved, summary and findings. " +
     "Requirements:\n" + assignment +
     "\nVerification evidence:\n" + JSON.stringify(verified.value),
     { label: "independent review", phase: "Review", model: reviewerModel,
