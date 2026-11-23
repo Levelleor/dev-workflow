@@ -2,17 +2,17 @@
 schemaVersion: 1
 roles:
   architect:
-    model: openai/gpt-6.2-sol
-    thinking: high
+    model: deepseek/deepseek-v4.1-flash-1017
+    thinking: max
   worker:
-    model: deepseek/deepseek-flash
-    thinking: medium
+    model: deepseek/deepseek-v4.1-flash-1017
+    thinking: high
   reviewer:
-    model: deepseek/deepseek-flash
-    thinking: medium
+    model: deepseek/deepseek-v4.1-flash-1017
+    thinking: max
   curator:
-    model: deepseek/deepseek-flash
-    thinking: low
+    model: deepseek/deepseek-v4.1-flash-1017
+    thinking: medium
 
 # Additional attempts/rounds after the first, bounded at 10 by the snapshot reader.
 repairRetries: 2
