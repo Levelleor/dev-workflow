@@ -48,6 +48,27 @@ describe("deterministic verification gates", () => {
     expect(listGates(fs, "/repo")).toEqual([]);
   });
 
+  it("enforces policy.unconfiguredProfile on empty and missing profiles", () => {
+    const { fs, initialize } = fixture();
+    initialize();
+    const file = "/repo/.agentctl/checks.yaml";
+    const original = fs.readFileSync(file, "utf8");
+    expect(original).toContain("unconfiguredProfile: block");
+    const runner = vi.fn<RunCommand>(() => outcome(0));
+    for (const target of ["feature", "missing"]) {
+      expect(() => verify(fs, "/repo", target, runner, "profile")).toThrow(/unconfiguredProfile: block/);
+    }
+    expect(runner).not.toHaveBeenCalled();
+
+    for (const invalid of ["allow", "warn", "false", "1", "null"]) {
+      fs.writeFileSync(file, original.replace("unconfiguredProfile: block", `unconfiguredProfile: ${invalid}`));
+      expect(() => verify(fs, "/repo", "feature", runner, "profile")).toThrow(/unconfiguredProfile must be 'block'/);
+    }
+    fs.writeFileSync(file, original.replace("policy:\n  unconfiguredProfile: block\n", ""));
+    expect(() => verify(fs, "/repo", "feature", runner, "profile")).toThrow(/missing or empty/);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
   it("preserves existing comments and gates, and refuses to replace one", () => {
     const { fs, initialize } = fixture();
     initialize();

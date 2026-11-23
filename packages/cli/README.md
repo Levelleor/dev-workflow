@@ -65,7 +65,7 @@ Use `agentctl --help` for the complete command reference.
 
 ## Verification gates
 
-Each gate is a named command in `.agentctl/checks.yaml`, independent of the project's language or test framework. The gate succeeds only with exit code 0. `agentctl verify` executes **all** registered gates, in name order, collecting failures rather than stopping at the first. `agentctl verify <name>` executes one gate; `agentctl verify list` lists them. Existing `--profile <name>` selections continue to work.
+Each gate is a named command in `.agentctl/checks.yaml`, independent of the project's language or test framework. The gate succeeds only with exit code 0. `agentctl verify` executes **all** registered gates, in name order, collecting failures rather than stopping at the first. `agentctl verify <name>` executes one gate; `agentctl verify list` lists them. Existing `--profile <name>` selections continue to work. Missing or empty selected profiles are blocked by `policy.unconfiguredProfile: block` (the only supported value). Unknown or permissive policy values are rejected; omitting the policy still fails closed.
 
 Register a gate with `agentctl verify add <name> [--timeout SECONDS] -- <command> [args...]`. The `--` delimiter preserves command options. Existing gates cannot be overwritten by this command. Changes are Git-tracked and should be reviewed because registered shell commands run with the invoking user's privileges. There is no gate removal or modification command in this milestone.
 

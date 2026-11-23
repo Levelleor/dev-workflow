@@ -57,8 +57,12 @@ test('project manifests contain only schema and task-context settings', () => {
   }
 });
 
-test('required verification profiles cannot silently pass', () => {
-  const content = readFileSync('.agentctl/checks.yaml', 'utf8');
-  assert.match(content, /missingRequiredCheck:\s*block/);
-  assert.match(content, /unconfiguredProfile:\s*block/);
+test('verification policy declares only enforced fields', () => {
+  for (const file of ['.agentctl/checks.yaml', 'templates/repository/.agentctl/checks.yaml']) {
+    const config = parseYaml(readFileSync(file, 'utf8'));
+    assert.deepEqual(Object.keys(config).sort(), ['checks', 'policy', 'profiles']);
+    assert.deepEqual(config.policy, { unconfiguredProfile: 'block' });
+    assert.ok(config.checks && typeof config.checks === 'object');
+    assert.ok(config.profiles && typeof config.profiles === 'object');
+  }
 });

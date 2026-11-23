@@ -1,6 +1,5 @@
 # Registered gates. 'agentctl verify' runs every gate in alphabetical order.
 # 'agentctl verify add NAME -- COMMAND ...' appends gates without overwriting.
-schemaVersion: 1
 checks:
   scaffold:
     command: npm test
@@ -12,8 +11,6 @@ profiles:
   feature: []     # Must be defined and nonempty before feature acceptance.
   release: []     # Must be defined and nonempty before publishing.
 
+# Missing or empty named profiles must never produce a successful verification.
 policy:
-  missingRequiredCheck: block
   unconfiguredProfile: block
-  workerMayChangePolicy: false
-  bindEvidenceToRevision: true

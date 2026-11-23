@@ -20,9 +20,9 @@ export function fixture() {
     "    thinking: medium", "repairRetries: 2", "escalationThreshold: 2", "reviewRetries: 2", "",
   ].join("\n"));
   mem.writeFileSync("/templates/.agentctl/checks.yaml", [
-    "schemaVersion: 1", "checks:", "  scaffold:",
+    "checks:", "  scaffold:",
     "    command: npm test", "    timeoutSeconds: 5", "profiles:",
-    "  scaffold: [scaffold]", "  feature: []", "",
+    "  scaffold: [scaffold]", "  feature: []", "policy:", "  unconfiguredProfile: block", "",
   ].join("\n"));
   const fs = mem as unknown as FileSystem;
   const initialize = () => initProject(fs, "/repo", "/templates");
