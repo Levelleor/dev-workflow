@@ -93,18 +93,8 @@ const assignment = contextResult.value.prompt;
 const originalGatesResult = await hostCall("agentctl.read", { op: "gates" });
 const originalGates = originalGatesResult.value;
 
-const lookup = await agent(
-  "Read the supplied claimed story and give a short implementation map: likely source paths, risks and acceptance criteria. " +
-  "Do not modify files and do not claim another task. The claim has already been performed deterministically. " +
-  "Task context:\n" + assignment,
-  { label: "cheap task lookup", phase: "Claim", model: cheapModel, agentType: "Explore" },
-);
-if (!lookup) {
-  return { status: "escalated", id, reason: "Task lookup agent failed", reviewRounds: 0 };
-}
-
-// A fresh implementation agent receives the complete, authoritative context on boot.
-let feedback = "Initial implementation. Lookup notes:\n" + lookup;
+// The implementer receives the complete task context directly; no planning agent is needed.
+let feedback = "Initial implementation.";
 let reviewRounds = 0;
 let verified = null;
 let latestImplementation = null;

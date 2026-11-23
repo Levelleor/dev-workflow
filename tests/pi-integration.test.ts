@@ -76,8 +76,7 @@ function fakeRunner(cwd: string, options: {
       async run(call: { label: string; prompt: string; modelPattern?: string }) {
         calls.push({ label: call.label, prompt: call.prompt, modelPattern: call.modelPattern });
         let value: unknown;
-        if (call.label.includes("lookup")) value = "src/index.ts, requirement from PRD-0001";
-        else if (call.label.includes("implementation") || call.label === "cheap repair") {
+        if (call.label.includes("implementation") || call.label === "cheap repair") {
           implementationRuns++;
           if (options.repairAt && implementationRuns >= options.repairAt) {
             fs.writeFileSync(path.join(cwd, "passed.flag"), "yes");
@@ -161,17 +160,18 @@ test("Pi host registers exactly three validated capabilities", () => {
   assert.deepEqual(caps.map((cap) => cap.effect), ["read", "write", "write"]);
 });
 
-test("real Ultracode workflow claims through CLI, verifies, reviews and completes", async () => {
+test("real Ultracode workflow claims through CLI and implements directly without task lookup", async () => {
   await project(async (cwd) => {
     const result = await execute(cwd);
     assert.equal(result.result.status, "implemented");
     assert.equal(result.result.id, "STORY-0001");
     assert.equal(result.result.reviewRounds, 1);
     assert.match(result.calls.find((call) => call.label === "cheap implementation")!.prompt, /E2E requirement/);
-    assert.ok(result.calls.some((call) => call.label === "independent review"));
-    assert.ok(result.calls.find((call) => call.label === "cheap task lookup")!.modelPattern?.endsWith(":medium"));
+    assert.deepEqual(result.calls.map((call) => call.label),
+      ["cheap implementation", "independent review", "publish accepted PR"]);
+    assert.doesNotMatch(result.calls[0].prompt, /Lookup notes/);
+    assert.ok(result.calls.find((call) => call.label === "cheap implementation")!.modelPattern?.endsWith(":medium"));
     assert.ok(result.calls.find((call) => call.label === "independent review")!.modelPattern?.endsWith(":medium"));
-    assert.ok(result.calls.some((call) => call.label === "publish accepted PR"));
     assert.match(fs.readFileSync(path.join(cwd, "docs/work/items/STORY-0001-implement-e2e.md"), "utf8"), /status: implemented/);
   });
 });
