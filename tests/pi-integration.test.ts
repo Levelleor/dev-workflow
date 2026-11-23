@@ -150,6 +150,9 @@ test("settings are read independently of task context and verification gates", (
   assert.match(workflow, /op: "context"/);
   assert.match(workflow, /op: "gates"/);
   assert.doesNotMatch(workflow, /op: "snapshot"/);
+  assert.doesNotMatch(workflow, /(?:original|current|baseline)\.required/);
+  assert.match(workflow, /current\.command !== original\.command/);
+  assert.match(workflow, /current\.timeoutSeconds < original\.timeoutSeconds/);
 });
 
 test("Pi host registers exactly three validated capabilities", () => {
