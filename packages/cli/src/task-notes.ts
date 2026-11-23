@@ -1,4 +1,3 @@
-import { parse as parseYaml } from "yaml";
 import type { FileSystem } from "./fs.js";
 import { writeFileAtomically } from "./fs.js";
 import { listRecords, type RecordEntry } from "./records.js";
@@ -65,26 +64,27 @@ function render(section: NoteSection, notes: TaskNote[]): string {
   return [before, block, after].filter(Boolean).join("\n\n") + "\n";
 }
 
-function incrementSequence(raw: string, notes: TaskNote[]): { id: string; updated: string } {
-  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(raw);
+/** Note IDs are derived from surviving headings, without a stored counter. */
+function nextNoteId(notes: TaskNote[]): string {
+  let lastNumber = 0;
+  for (const note of notes) {
+    const number = Number(note.id.slice(1));
+    if (!Number.isSafeInteger(number)) throw new Error(`Invalid task note ID: ${note.id}`);
+    lastNumber = Math.max(lastNumber, number);
+  }
+  if (lastNumber === Number.MAX_SAFE_INTEGER) throw new Error("Task note IDs exhausted.");
+  return `N${String(lastNumber + 1).padStart(3, "0")}`;
+}
+
+/** Drop obsolete counter metadata when a task is next updated. */
+function withoutLegacyNoteSequence(raw: string): string {
+  const frontmatter = /^---(\r?\n)([\s\S]*?)\r?\n---\r?\n/.exec(raw);
   if (!frontmatter) throw new Error("Task is missing YAML frontmatter.");
-  const parsed: unknown = parseYaml(frontmatter[1]);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Task frontmatter is not a YAML object.");
-  }
-  const metadata = parsed as Record<string, unknown>;
-  const current = metadata.note_sequence ?? 1;
-  if (typeof current !== "number" || !Number.isSafeInteger(current) || current < 1) {
-    throw new Error("Invalid task note_sequence.");
-  }
-  const existing = notes.map((note) => Number(note.id.slice(1)));
-  const sequence = Math.max(current, ...existing.map((n) => n + 1), 1);
-  const id = `N${String(sequence).padStart(3, "0")}`;
-  const source = frontmatter[1];
-  const front = /^note_sequence:[^\r\n]*$/m.test(source)
-    ? source.replace(/^note_sequence:[^\r\n]*$/m, `note_sequence: ${sequence + 1}`)
-    : `${source}\nnote_sequence: ${sequence + 1}`;
-  return { id, updated: `---\n${front}\n---\n${raw.slice(frontmatter[0].length)}` };
+  const front = frontmatter[2];
+  const updated = front.split(/\r?\n/).filter((line) => !/^note_sequence:[^\r\n]*$/.test(line))
+    .join(frontmatter[1]);
+  const offset = 3 + frontmatter[1].length;
+  return raw.slice(0, offset) + updated + raw.slice(offset + front.length);
 }
 
 export function listTaskNotes(fs: FileSystem, root: string, id?: string): TaskNotes {
@@ -104,10 +104,9 @@ export function addTaskNote(fs: FileSystem, root: string, text: string, id?: str
     const task = taskRecord(fs, root, id);
     const raw = fs.readFileSync(task.file, "utf8");
     const parsed = parseNotes(raw);
-    const next = incrementSequence(raw, parsed.notes);
-    const section = parseNotes(next.updated);
-    const note = { id: next.id, text: body };
-    writeFileAtomically(fs, task.file, render(section, [...section.notes, note]));
+    const note = { id: nextNoteId(parsed.notes), text: body };
+    writeFileAtomically(fs, task.file,
+      render(parseNotes(withoutLegacyNoteSequence(raw)), [...parsed.notes, note]));
     return note;
   });
 }
