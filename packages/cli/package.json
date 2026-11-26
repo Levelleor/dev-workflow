@@ -24,6 +24,16 @@
     "smoke": "node dist/index.js --help && node dist/index.js --version"
   },
   "dependencies": {
+    "github-slugger": "^2.0.0",
+    "mdast-util-to-string": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-lint-no-undefined-references": "^5.0.2",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "vfile": "^6.0.3",
     "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4"
   }
 }

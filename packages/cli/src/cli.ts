@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FileSystem } from "./fs.js";
@@ -5,7 +6,10 @@ import { disk } from "./fs.js";
 import { findProjectRoot, initProject, readYaml } from "./project.js";
 import { addRecord, listRecords } from "./records.js";
 import { knowledgeAddTypes } from "./record-types.js";
+import { readSections, recordCreationHelp, type SectionArgument } from "./record-authoring-cli.js";
 import { readRecordCommand, recordCommandHelp } from "./record-query-cli.js";
+import { lintDocuments } from "./documents.js";
+import { formatDiagnostic } from "./document-links.js";
 import { getSetting, setSetting, showConfig } from "./config.js";
 import { addGate, listGates, runCommand, verify, type RunCommand } from "./verify.js";
 import { addTaskNote, listTaskNotes, removeTaskNote } from "./task-notes.js";
@@ -16,6 +20,7 @@ export type CliOptions = {
   fs?: FileSystem;
   templates?: string;
   runner?: RunCommand;
+  stdin?: () => string;
   output?: (message: string) => void;
   error?: (message: string) => void;
 };
@@ -24,7 +29,8 @@ const help = `agentctl: repository-backed coding-agent development workflow
 
 Usage:
   agentctl init [directory]                         Safely install project files
-  agentctl doctor                                   Inspect project setup
+  agentctl doctor                                   Inspect project setup and documents
+  agentctl docs lint [--json]                        Check document structure and repository links
   agentctl status [--json]                          Show task counts
   agentctl task claim <ID|next> [--json]            Claim a task, returning its ID and status
   Example: agentctl task claim next                  Select automatically by priority
@@ -37,6 +43,7 @@ Usage:
   agentctl work list|search TEXT|show ID|blockers ID|add
   agentctl knowledge list|search TEXT|show ID|add|capture
   agentctl knowledge --help | agentctl work --help    Show lookup options and examples
+  agentctl knowledge add -h | agentctl work add -h    Show creation options and section examples
   agentctl config show|get KEY|set KEY VALUE
   agentctl verify [--json]                          Run every registered gate
   agentctl verify list [--json]                     List verification gates
@@ -59,23 +66,30 @@ Project and task documentation stays in Git; Ultracode execution is separate.
 `;
 
 type Flag = string | boolean;
-function argumentsOf(argv: string[]): { args: string[]; flags: Record<string, Flag> } {
+function argumentsOf(argv: string[]): { args: string[]; flags: Record<string, Flag>; sections: SectionArgument[] } {
   const args: string[] = [];
   const flags: Record<string, Flag> = Object.create(null);
+  const sections: SectionArgument[] = [];
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
+    if (token === "-h") {
+      flags.help = true;
+      continue;
+    }
     if (!token.startsWith("--") || token === "--") {
       args.push(token);
       continue;
     }
-    const [name, inline] = token.slice(2).split("=", 2);
+    const separator = token.indexOf("=");
+    const name = separator < 0 ? token.slice(2) : token.slice(2, separator);
+    const inline = separator < 0 ? undefined : token.slice(separator + 1);
     if (!/^[a-z][\w-]*$/.test(name)) throw new Error(`Invalid option: ${token}`);
-    if (inline !== undefined) flags[name] = inline;
-    else if (["json", "help", "version", "body", "transitive"].includes(name)) flags[name] = true;
-    else if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) flags[name] = argv[++i];
-    else flags[name] = true;
+    const boolean = ["json", "help", "version", "body", "transitive"].includes(name);
+    const value = inline ?? (!boolean && i + 1 < argv.length && !argv[i + 1].startsWith("-") ? argv[++i] : undefined);
+    if (name === "section" || name === "section-file") sections.push({ flag: name, value });
+    else flags[name] = value ?? true;
   }
-  return { args, flags };
+  return { args, flags, sections };
 }
 
 function flag(flags: Record<string, Flag>, name: string): string | undefined {
@@ -86,6 +100,18 @@ function flag(flags: Record<string, Flag>, name: string): string | undefined {
 function requireArg(value: string | undefined, usage: string): string {
   if (!value) throw new Error(`Missing argument. Usage: ${usage}`);
   return value;
+}
+
+function idList(flags: Record<string, Flag>, name: string): string[] | undefined {
+  if (!Object.hasOwn(flags, name)) return undefined;
+  const ids = flag(flags, name)?.split(",").map((id) => id.trim());
+  if (!ids || ids.some((id) => !id)) throw new Error(`--${name} requires a comma-separated list of record IDs.`);
+  return [...new Set(ids)];
+}
+
+function readStdin(): string {
+  if (process.stdin.isTTY) throw new Error("Pipe Markdown to stdin or use a quoted heredoc.");
+  return readFileSync(0, "utf8");
 }
 
 export function runCli(argv: string[], options: CliOptions = {}): number {
@@ -100,7 +126,7 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     // Everything after '--' in verify add belongs to the registered command.
     const separator = argv[0] === "verify" && argv[1] === "add" ? argv.indexOf("--") : -1;
     const gateCommand = separator >= 0 ? argv.slice(separator + 1) : [];
-    const { args, flags } = argumentsOf(separator >= 0 ? argv.slice(0, separator) : argv);
+    const { args, flags, sections } = argumentsOf(separator >= 0 ? argv.slice(0, separator) : argv);
     const [command, action, ...rest] = args;
     const json = flags.json === true;
     const emit = (value: unknown) => output(json ? JSON.stringify(value, null, 2) : typeof value === "string" ? value : JSON.stringify(value, null, 2));
@@ -108,8 +134,20 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     if (command === "version" || flags.version === true) { output("agentctl 0.1.0"); return 0; }
     if (!command || command === "help" || flags.help === true) {
       const topic = command === "help" ? action : command;
-      output(topic === "knowledge" || topic === "work" ? recordCommandHelp(topic) : help);
+      const subcommand = command === "help" ? rest[0] : action;
+      if ((topic === "knowledge" || topic === "work") && subcommand === "add") {
+        output(recordCreationHelp(topic, flag(flags, "type")));
+      } else if (topic === "knowledge" && subcommand === "capture") {
+        output(recordCreationHelp("capture"));
+      } else {
+        output(topic === "knowledge" || topic === "work" ? recordCommandHelp(topic) : help);
+      }
       return 0;
+    }
+    const createsRecord = (command === "work" && action === "add")
+      || (command === "knowledge" && (action === "add" || action === "capture"));
+    if (sections.length && !createsRecord) {
+      throw new Error(`Unknown option: --${sections[0].flag}. Section input is available on record creation commands.`);
     }
 
     if (command === "init") {
@@ -125,6 +163,7 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
       const problems: string[] = [];
       const warnings: string[] = [];
       if (!fs.existsSync(join(root, "AGENTS.md"))) problems.push("Missing AGENTS.md");
+      problems.push(...lintDocuments(fs, root).map(formatDiagnostic));
       const checks = readYaml(fs, join(root, ".agentctl", "checks.yaml"));
       const profiles = checks.profiles as Record<string, unknown> | undefined;
       for (const [name, value] of Object.entries(profiles ?? {})) {
@@ -132,6 +171,13 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
       }
       emit({ ok: problems.length === 0, problems, warnings });
       return problems.length ? 1 : 0;
+    }
+
+    if (command === "docs" && action === "lint" && !rest.length) {
+      const diagnostics = lintDocuments(fs, root);
+      const ok = diagnostics.length === 0;
+      emit(json ? { ok, diagnostics } : diagnostics.map(formatDiagnostic).join("\n") || "Documents passed validation.");
+      return ok ? 0 : 1;
     }
 
     if (command === "status") {
@@ -202,25 +248,35 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
 
     if (command === "work") {
       if (action !== "add") throw new Error("Usage: agentctl work list|search|show|blockers|add");
-      const record = addRecord(fs, root, { type: "story", title: requireArg(flag(flags, "title"), "agentctl work add --title TEXT --parent PRD-ID"), parent: flag(flags, "parent") });
+      if (rest.length) throw new Error("Unexpected argument. See 'agentctl work add -h'.");
+      const record = addRecord(fs, root, {
+        type: "story", title: requireArg(flag(flags, "title"), "agentctl work add --title TEXT --parent PRD-ID"),
+        parent: flag(flags, "parent"),
+        dependsOn: idList(flags, "depends-on"), blockedBy: idList(flags, "blocked-by"),
+        sections: readSections("story", sections, fs, cwd, options.stdin ?? readStdin),
+      });
       emit(json ? record : `Created ${record.id}: ${record.file}`);
       return 0;
     }
 
     if (command === "knowledge") {
       if (action === "add") {
+        if (rest.length) throw new Error("Unexpected argument. See 'agentctl knowledge add -h'.");
         const type = knowledgeAddTypes.find((candidate) => candidate === flag(flags, "type"));
         if (!type) throw new Error(`Use --type ${knowledgeAddTypes.join("|")}.`);
         const usage = `agentctl knowledge add --type ${knowledgeAddTypes.join("|")} --title TEXT`;
         const title = requireArg(flag(flags, "title"), usage);
-        const related = flag(flags, "related")?.split(",").map((id) => id.trim());
-        if (Object.hasOwn(flags, "related") && (!related || related.some((id) => !id))) {
-          throw new Error("--related requires a comma-separated list of record IDs.");
-        }
-        const record = addRecord(fs, root, { type, title, related: related && [...new Set(related)] });
+        const record = addRecord(fs, root, {
+          type, title, related: idList(flags, "related"),
+          sections: readSections(type, sections, fs, cwd, options.stdin ?? readStdin),
+        });
         emit(json ? record : `Created ${record.id}: ${record.file}`);
       } else if (action === "capture") {
-        const record = addRecord(fs, root, { type: "note", title: requireArg(rest[0], "agentctl knowledge capture TEXT --source ID"), source: flag(flags, "source") });
+        if (rest.length > 1) throw new Error("Unexpected argument. See 'agentctl knowledge capture -h'.");
+        const record = addRecord(fs, root, {
+          type: "note", title: requireArg(rest[0], "agentctl knowledge capture TEXT --source ID"), source: flag(flags, "source"),
+          sections: readSections("note", sections, fs, cwd, options.stdin ?? readStdin),
+        });
         emit(json ? record : `Captured ${record.id}: ${record.file}`);
       } else throw new Error("Usage: agentctl knowledge list|search|show|add|capture");
       return 0;

@@ -1,27 +1,33 @@
 export const recordTypes = {
   prd: {
     directory: "docs/product", prefix: "PRD", initialStatus: "proposed",
-    sections: ["Problem", "Goals", "Acceptance criteria"],
+    sections: { problem: "Problem", goals: "Goals", "acceptance-criteria": "Acceptance criteria" },
   },
   adr: {
     directory: "docs/decisions", prefix: "ADR", initialStatus: "proposed",
-    sections: ["Context", "Decision", "Consequences"],
+    sections: { context: "Context", decision: "Decision", consequences: "Consequences" },
   },
   story: {
     directory: "docs/work/items", prefix: "STORY", initialStatus: "pending",
-    sections: ["Outcome", "Acceptance criteria", "Verification plan"],
+    sections: { outcome: "Outcome", "acceptance-criteria": "Acceptance criteria", "verification-plan": "Verification plan" },
   },
   note: {
     directory: "docs/knowledge/inbox", prefix: "NOTE", initialStatus: "inbox",
-    sections: ["Discovery", "Classification"],
+    sections: { discovery: "Discovery", classification: "Classification" },
   },
   research: {
     directory: "docs/knowledge/research", prefix: "RESEARCH", initialStatus: "draft",
-    sections: ["Question", "Sources", "Findings", "Options and trade-offs", "Open questions"],
+    sections: {
+      question: "Question", sources: "Sources", findings: "Findings",
+      "options-and-trade-offs": "Options and trade-offs", "open-questions": "Open questions",
+    },
   },
   brainstorm: {
     directory: "docs/knowledge/brainstorming", prefix: "BRAINSTORM", initialStatus: "draft",
-    sections: ["Problem", "Ideas", "Ideas set aside and why", "Open questions", "Next steps"],
+    sections: {
+      problem: "Problem", ideas: "Ideas", "ideas-set-aside-and-why": "Ideas set aside and why",
+      "open-questions": "Open questions", "next-steps": "Next steps",
+    },
   },
 } as const;
 

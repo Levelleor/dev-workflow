@@ -4,6 +4,9 @@ checks:
   scaffold:
     command: npm test
     timeoutSeconds: 120
+  docs:
+    command: npm run lint:docs
+    timeoutSeconds: 120
 
 profiles:
   scaffold: [scaffold]

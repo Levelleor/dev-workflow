@@ -13,4 +13,6 @@ Use `agentctl work` and `agentctl knowledge` instead of manually finding plannin
 
 Find records with `agentctl knowledge search "topic"` or `agentctl work search "topic"`. Read a match with `show ID --body`. Use `agentctl knowledge --help` or `agentctl work --help` for filters and dependency lookup.
 
+Use `agentctl knowledge add -h` or `agentctl work add -h` for section names and examples of supplying Markdown. Run `agentctl docs lint` after editing docs directly.
+
 Never silently modify accepted requirements, decisions or verification policy merely to pass a task. Never commit credentials or `.agentctl/runtime/`. Parallel worktrees require a shared coordinator.
