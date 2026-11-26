@@ -6,11 +6,14 @@ describe("CLI interface", () => {
   it("exposes usage and version without a repository", () => {
     const output: string[] = [];
     const { fs } = fixture();
-    expect(runCli(["--help"], { fs, cwd: "/repo", output: (value) => output.push(value) })).toBe(0);
-    expect(output.join("\n")).toContain("agentctl init");
-    output.length = 0;
-    expect(runCli(["--version"], { fs, cwd: "/repo", output: (value) => output.push(value) })).toBe(0);
-    expect(output.join("\n")).toContain("0.1.0");
+    const options = { fs, cwd: "/repo", output: (value: string) => output.push(value) };
+    for (const argv of [[], ["--help"], ["-h"], ["help"]]) {
+      expect(runCli(argv, options)).toBe(0);
+    }
+    expect(output[0]).toContain("agentctl init");
+    expect(output).toEqual(Array(4).fill(output[0]));
+    expect(runCli(["--version"], options)).toBe(0);
+    expect(output.at(-1)).toContain("0.1.0");
   });
 
   it("initialises an absolute target directory", () => {

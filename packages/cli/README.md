@@ -28,6 +28,8 @@ agentctl verify --profile scaffold       # legacy named profile
 
 Commands operate on the project containing the current working directory. `init` works in a new or existing directory; it creates only missing files and never overwrites an existing `AGENTS.md`, document or configuration file.
 
+Run `agentctl --help` for the command list. Use `-h`, `--help`, or the `help` command for any subcommand's usage. For example, `agentctl task claim -h` and `agentctl help task claim` show the same manual. Help works outside a project.
+
 Record creation allocates stable IDs, validates required relationships and adds links to the relevant category index. New stories begin pending. Verification executes registered shell commands but is **not yet an isolated, security-hardened acceptance verifier** and does not issue signed revision-bound receipts.
 
 ## Author records through the CLI
@@ -115,7 +117,7 @@ New stories start `pending`. Optional frontmatter includes `priority: 1` (highes
 
 The repository's task Markdown is Git tracked. The process-level `.agentctl/runtime/task.lock` is ignored by Git and protects concurrent claims **within one working tree**. It does not coordinate separate worktrees, machines, or stale locks after crashes. The first Ultracode integration must retain the single-writer constraint until shared coordination is implemented.
 
-Use `agentctl --help` for the complete command reference.
+Use `agentctl task --help` for the task commands or `agentctl task claim --help` for claim options and examples.
 
 
 ## Verification gates

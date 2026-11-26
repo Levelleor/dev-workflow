@@ -34,7 +34,7 @@ describe("task CLI", () => {
   it("explains usage via built-in help without project context", () => {
     const { fs } = fixture();
     const output: string[] = [];
-    expect(runCli(["help"], { fs, cwd: "/repo", output: (text) => output.push(text) })).toBe(0);
+    expect(runCli(["help", "task", "claim"], { fs, cwd: "/repo", output: (text) => output.push(text) })).toBe(0);
     expect(output[0]).toContain("task claim next");
     expect(output[0]).toContain("Dependencies must be");
   });

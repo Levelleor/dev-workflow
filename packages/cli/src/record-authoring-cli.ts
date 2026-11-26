@@ -1,11 +1,14 @@
 import { resolve } from "node:path";
+import { flag, idList, requireArg, type SectionArgument } from "./cli-arguments.js";
+import type { CommandDefinition } from "./cli-command.js";
 import type { FileSystem } from "./fs.js";
+import { addRecord } from "./records.js";
 import { knowledgeAddTypes, recordTypes, type RecordType } from "./record-types.js";
 
-export function recordCreationHelp(kind: "work" | "knowledge" | "capture", type?: string): string {
-  const command = kind === "work" ? "work add" : kind === "capture" ? "knowledge capture" : "knowledge add";
-  const metadata = kind === "work" ? "--title TEXT --parent PRD-ID [--depends-on ID[,ID...]] [--blocked-by ID[,ID...]]"
-    : kind === "capture" ? "TITLE --source ID" : `--type ${knowledgeAddTypes.join("|")} --title TEXT [--related ID[,ID...]]`;
+const sectionOptions = "\n       [--section NAME=TEXT] [--section-file NAME=PATH|-] [--json]";
+const knowledgeTypesOption = `--type ${knowledgeAddTypes.join("|")}`;
+
+function recordCreationDetails(kind: "work" | "knowledge" | "capture", type?: string): string {
   const selected = knowledgeAddTypes.find((candidate) => candidate === type);
   const types: readonly RecordType[] = kind === "work" ? ["story"] : kind === "capture" ? ["note"]
     : selected ? [selected] : knowledgeAddTypes;
@@ -26,9 +29,6 @@ export function recordCreationHelp(kind: "work" | "knowledge" | "capture", type?
     "MARKDOWN",
   ];
   return [
-    `Usage: agentctl ${command} ${metadata}`,
-    "       [--section NAME=TEXT] [--section-file NAME=PATH|-] [--json]",
-    "",
     "Supply metadata with the flags above. agentctl generates the record ID, frontmatter, and section headings.",
     ...(kind === "knowledge" ? [
       "Use --related with existing record IDs. Add --type adr to this help command to show only ADR section names.",
@@ -49,9 +49,7 @@ export function recordCreationHelp(kind: "work" | "knowledge" | "capture", type?
   ].join("\n");
 }
 
-export type SectionArgument = { flag: "section" | "section-file"; value: string | undefined };
-
-export function readSections(
+function readSections(
   type: RecordType, args: SectionArgument[], fs: FileSystem, cwd: string, stdin: () => string,
 ): Map<string, string> {
   const names = new Set<string>();
@@ -83,3 +81,59 @@ export function readSections(
     }
   }));
 }
+
+export const workAddCommand: CommandDefinition = {
+  name: "add",
+  summary: "Create a story under a product requirement.",
+  syntax: "--title TEXT --parent PRD-ID [--depends-on ID[,ID...]] [--blocked-by ID[,ID...]]" + sectionOptions,
+  details: () => recordCreationDetails("work"),
+  acceptsSections: true,
+  run({ args, flags, sections, fs, root, cwd, stdin, json, emit, usage }) {
+    if (args.length) throw new Error("Unexpected argument. See 'agentctl work add -h'.");
+    const record = addRecord(fs, root, {
+      type: "story", title: requireArg(flag(flags, "title"), usage),
+      parent: flag(flags, "parent"),
+      dependsOn: idList(flags, "depends-on"), blockedBy: idList(flags, "blocked-by"),
+      sections: readSections("story", sections, fs, cwd, stdin),
+    });
+    emit(json ? record : `Created ${record.id}: ${record.file}`);
+    return 0;
+  },
+};
+
+export const knowledgeAddCommand: CommandDefinition = {
+  name: "add",
+  summary: "Create a knowledge record with a selected type.",
+  syntax: `${knowledgeTypesOption} --title TEXT [--related ID[,ID...]]` + sectionOptions,
+  details: (flags) => recordCreationDetails("knowledge", flag(flags, "type")),
+  acceptsSections: true,
+  run({ args, flags, sections, fs, root, cwd, stdin, json, emit, usage }) {
+    if (args.length) throw new Error("Unexpected argument. See 'agentctl knowledge add -h'.");
+    const type = knowledgeAddTypes.find((candidate) => candidate === flag(flags, "type"));
+    if (!type) throw new Error(`Use ${knowledgeTypesOption}.`);
+    const title = requireArg(flag(flags, "title"), usage);
+    const record = addRecord(fs, root, {
+      type, title, related: idList(flags, "related"),
+      sections: readSections(type, sections, fs, cwd, stdin),
+    });
+    emit(json ? record : `Created ${record.id}: ${record.file}`);
+    return 0;
+  },
+};
+
+export const knowledgeCaptureCommand: CommandDefinition = {
+  name: "capture",
+  summary: "Capture a discovery as a note linked to a source record.",
+  syntax: "TITLE --source ID" + sectionOptions,
+  details: () => recordCreationDetails("capture"),
+  acceptsSections: true,
+  run({ args, flags, sections, fs, root, cwd, stdin, json, emit, usage }) {
+    if (args.length > 1) throw new Error("Unexpected argument. See 'agentctl knowledge capture -h'.");
+    const record = addRecord(fs, root, {
+      type: "note", title: requireArg(args[0], usage), source: flag(flags, "source"),
+      sections: readSections("note", sections, fs, cwd, stdin),
+    });
+    emit(json ? record : `Captured ${record.id}: ${record.file}`);
+    return 0;
+  },
+};
