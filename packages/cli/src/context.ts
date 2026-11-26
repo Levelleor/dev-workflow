@@ -91,8 +91,11 @@ export function buildTaskContext(fs: FileSystem, root: string, task: RecordEntry
     const record = byId.get(id);
     if (!record) throw new Error(`Broken context relationship: ${id}`);
     const path = fileOf(record);
-    if (record.type === "adr" && record.status !== "accepted") optional.add(path);
-    else include(path, taskDocs, false, record.id);
+    if (record.type === "research" || record.type === "brainstorm" || (record.type === "adr" && record.status !== "accepted")) {
+      optional.add(path);
+    } else {
+      include(path, taskDocs, false, record.id);
+    }
   }
   for (const id of ids(task.metadata.depends_on)) {
     const record = byId.get(id);

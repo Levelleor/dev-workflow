@@ -2,8 +2,9 @@ import { basename, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { FileSystem } from "./fs.js";
 import { slug } from "./project.js";
+import { recordTypeNames, recordTypes, type RecordType } from "./record-types.js";
 
-export type RecordType = "story" | "prd" | "adr" | "note";
+export type { RecordType } from "./record-types.js";
 export type RecordEntry = {
   id: string;
   type: RecordType;
@@ -12,16 +13,6 @@ export type RecordEntry = {
   file: string;
   metadata: Record<string, unknown>;
   body: string;
-};
-
-const directories: Record<RecordType, string> = {
-  story: "docs/work/items",
-  prd: "docs/product",
-  adr: "docs/decisions",
-  note: "docs/knowledge/inbox",
-};
-const prefixes: Record<RecordType, string> = {
-  story: "STORY", prd: "PRD", adr: "ADR", note: "NOTE",
 };
 
 function decode(raw: string, file: string): RecordEntry {
@@ -33,7 +24,7 @@ function decode(raw: string, file: string): RecordEntry {
   }
   const metadata = value as Record<string, unknown>;
   const type = String(metadata.type) as RecordType;
-  if (!(type in directories) || typeof metadata.id !== "string") {
+  if (!Object.hasOwn(recordTypes, type) || typeof metadata.id !== "string") {
     throw new Error(`Unrecognised record type or missing ID: ${file}`);
   }
   const body = raw.slice(match[0].length);
@@ -46,11 +37,10 @@ function decode(raw: string, file: string): RecordEntry {
 
 export function listRecords(fs: FileSystem, root: string, type?: RecordType): RecordEntry[] {
   const result: RecordEntry[] = [];
-  for (const selected of (type ? [type] : Object.keys(directories) as RecordType[])) {
-    const relative = directories[selected];
-    const folder = join(root, relative);
+  for (const selected of type ? [type] : recordTypeNames) {
+    const { directory, prefix } = recordTypes[selected];
+    const folder = join(root, directory);
     if (!fs.existsSync(folder)) continue;
-    const prefix = prefixes[selected];
     const recordFilename = new RegExp(`^${prefix}-\\d{4,}(?:-.+)?\\.md$`);
     for (const filename of fs.readdirSync(folder).filter((f) => recordFilename.test(f)).sort()) {
       const file = join(folder, filename);
@@ -94,27 +84,22 @@ export function addRecord(fs: FileSystem, root: string, input: NewRecord): Recor
   for (const related of input.related ?? []) {
     if (!all.some((item) => item.id === related)) throw new Error(`Unknown related record: ${related}`);
   }
-  const prefix = prefixes[input.type];
+  const { directory, prefix, initialStatus, sections } = recordTypes[input.type];
   const numbers = all.map((item) => item.id.match(new RegExp(`^${prefix}-(\\d+)$`))?.[1])
     .filter((value): value is string => !!value).map(Number);
   const id = `${prefix}-${String(Math.max(0, ...numbers) + 1).padStart(4, "0")}`;
-  const dir = join(root, directories[input.type]);
+  const dir = join(root, directory);
   const file = join(dir, `${id}-${slug(title)}.md`);
   const metadata: Record<string, unknown> = {
-    id, type: input.type, status: input.type === "note" ? "inbox" : input.type === "story" ? "pending" : "proposed",
+    id, type: input.type, status: initialStatus,
     created_at: new Date().toISOString().slice(0, 10),
   };
   if (input.parent) metadata.parent = input.parent;
   if (input.source) metadata.source = input.source;
   if (input.type === "story") { metadata.depends_on = []; metadata.priority = 3; }
   metadata.related = input.related ?? [];
-  const sections: Record<RecordType, string> = {
-    story: "## Outcome\n\n## Acceptance criteria\n\n## Verification plan\n",
-    prd: "## Problem\n\n## Goals\n\n## Acceptance criteria\n",
-    adr: "## Context\n\n## Decision\n\n## Consequences\n",
-    note: "## Discovery\n\n## Classification\n",
-  };
-  const raw = `---\n${stringifyYaml(metadata).trimEnd()}\n---\n\n# ${title}\n\n${sections[input.type]}`;
+  const headings = sections.map((section) => `## ${section}`).join("\n\n");
+  const raw = `---\n${stringifyYaml(metadata).trimEnd()}\n---\n\n# ${title}\n\n${headings}\n`;
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(file, raw, { encoding: "utf8", flag: "wx" });
 

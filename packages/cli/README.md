@@ -31,6 +31,16 @@ Record creation allocates stable IDs, validates required relationships and adds 
 
 ## Record lookup
 
+Use `research` for sources, findings and trade-offs, and `brainstorm` for ideas and the reasons options were set aside. Both start as drafts. Research records live in `docs/knowledge/research/` with `RESEARCH-` IDs. Brainstorming records live in `docs/knowledge/brainstorming/` with `BRAINSTORM-` IDs. Both are included in knowledge lists and search.
+
+```sh
+agentctl knowledge add --type research --title "Evaluate storage options"
+agentctl knowledge add --type brainstorm --title "Explore storage designs" --related RESEARCH-0001
+agentctl knowledge add --type adr --title "Choose SQLite" --related RESEARCH-0001,BRAINSTORM-0001
+agentctl knowledge search "storage" --type research
+agentctl knowledge list --type brainstorm --related-to RESEARCH-0001
+```
+
 ```sh
 agentctl knowledge search "task claims" --type adr --status accepted
 agentctl knowledge show ADR-0001 --body

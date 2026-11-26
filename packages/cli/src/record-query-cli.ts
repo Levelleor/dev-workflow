@@ -1,12 +1,12 @@
 import type { FileSystem } from "./fs.js";
 import { findRecord, listRecords, type RecordEntry, type RecordType } from "./records.js";
+import { knowledgeAddTypes, knowledgeTypes } from "./record-types.js";
 import { isCalendarDate, matchesRecord, recordBody, searchRecords, storyById, walkDependencies } from "./record-query.js";
 import { taskBlockers } from "./task.js";
 
 type Command = "knowledge" | "work";
 type Flags = Readonly<Record<string, string | boolean>>;
 
-const knowledgeTypes = ["prd", "adr", "note"] as const;
 const recordFields = ["id", "title", "type", "status", "body"] as const;
 const metadataFields = [
   "parent", "priority", "related", "source", "supersedes", "depends_on", "blocked_by", "created_at", "accepted_at",
@@ -25,10 +25,11 @@ export function recordCommandHelp(command: Command): string {
     `${prefix} list [filters] [--fields LIST] [--limit N] [--json]`,
     `${prefix} show ID [--body] [--json]`,
     ...(command === "knowledge" ? [
-      `${prefix} add --type prd|adr --title TEXT`,
+      `${prefix} add --type ${knowledgeAddTypes.join("|")} --title TEXT [--related ID[,ID...]]`,
       `${prefix} capture TEXT --source ID`,
       "",
-      "Record types: --type prd|adr|note.",
+      `Record types for lists and search: --type ${knowledgeTypes.join("|")}.`,
+      "Use research for evidence and findings, brainstorm for ideas, and adr for architectural decisions.",
     ] : [
       `${prefix} blockers STORY-ID [--json]`,
       `${prefix} add --title TEXT --parent PRD-ID`,
@@ -96,7 +97,7 @@ function listType(command: Command, value?: string): RecordType | undefined {
   }
   if (!value) return undefined;
   const type = knowledgeTypes.find((type) => type === value);
-  if (!type) throw new Error("Use --type prd, adr or note with knowledge commands.");
+  if (!type) throw new Error(`Use --type ${knowledgeTypes.join("|")} with knowledge commands.`);
   return type;
 }
 

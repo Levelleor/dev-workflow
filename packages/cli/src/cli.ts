@@ -4,6 +4,7 @@ import type { FileSystem } from "./fs.js";
 import { disk } from "./fs.js";
 import { findProjectRoot, initProject, readYaml } from "./project.js";
 import { addRecord, listRecords } from "./records.js";
+import { knowledgeAddTypes } from "./record-types.js";
 import { readRecordCommand, recordCommandHelp } from "./record-query-cli.js";
 import { getSetting, setSetting, showConfig } from "./config.js";
 import { addGate, listGates, runCommand, verify, type RunCommand } from "./verify.js";
@@ -140,6 +141,8 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
         prds: records.filter((r) => r.type === "prd").length,
         adrs: records.filter((r) => r.type === "adr").length,
         notes: records.filter((r) => r.type === "note").length,
+        research: records.filter((r) => r.type === "research").length,
+        brainstorms: records.filter((r) => r.type === "brainstorm").length,
       }, activeStories: records.filter((r) => r.type === "story" && ["pending", "ready", "in-progress"].includes(r.status)).length });
       return 0;
     }
@@ -206,9 +209,15 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
 
     if (command === "knowledge") {
       if (action === "add") {
-        const type = flag(flags, "type");
-        if (type !== "prd" && type !== "adr") throw new Error("Use --type prd or --type adr.");
-        const record = addRecord(fs, root, { type, title: requireArg(flag(flags, "title"), "agentctl knowledge add --type prd|adr --title TEXT") });
+        const type = knowledgeAddTypes.find((candidate) => candidate === flag(flags, "type"));
+        if (!type) throw new Error(`Use --type ${knowledgeAddTypes.join("|")}.`);
+        const usage = `agentctl knowledge add --type ${knowledgeAddTypes.join("|")} --title TEXT`;
+        const title = requireArg(flag(flags, "title"), usage);
+        const related = flag(flags, "related")?.split(",").map((id) => id.trim());
+        if (Object.hasOwn(flags, "related") && (!related || related.some((id) => !id))) {
+          throw new Error("--related requires a comma-separated list of record IDs.");
+        }
+        const record = addRecord(fs, root, { type, title, related: related && [...new Set(related)] });
         emit(json ? record : `Created ${record.id}: ${record.file}`);
       } else if (action === "capture") {
         const record = addRecord(fs, root, { type: "note", title: requireArg(rest[0], "agentctl knowledge capture TEXT --source ID"), source: flag(flags, "source") });

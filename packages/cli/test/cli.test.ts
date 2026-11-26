@@ -28,7 +28,7 @@ describe("CLI interface", () => {
     const result = runCli(["--json", "status"], { fs, cwd: "/repo", output: (value) => output.push(value) });
     expect(result).toBe(0);
     expect(JSON.parse(output[0])).toEqual({
-      records: { stories: 0, prds: 0, adrs: 0, notes: 0 },
+      records: { stories: 0, prds: 0, adrs: 0, notes: 0, research: 0, brainstorms: 0 },
       activeStories: 0,
     });
   });

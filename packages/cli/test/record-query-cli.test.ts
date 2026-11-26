@@ -6,6 +6,7 @@ import { fixture } from "./fixtures.js";
 
 const directories: Record<RecordType, string> = {
   story: "work/items", prd: "product", adr: "decisions", note: "knowledge/inbox",
+  research: "knowledge/research", brainstorm: "knowledge/brainstorming",
 };
 
 function repository() {
@@ -35,7 +36,7 @@ function repository() {
     return JSON.parse(result.output);
   }
 
-  return { record, call, json };
+  return { fs, record, call, json };
 }
 
 describe("record lookup commands", () => {
@@ -122,6 +123,55 @@ describe("record lookup commands", () => {
     expect([before, after]).toContain(result.metadata.created_at);
     expect(json("knowledge", "list", "--created-since", before, "--fields", "id,created_at"))
       .toEqual([{ id: result.id, created_at: result.metadata.created_at }]);
+  });
+
+  it("creates and discovers research and brainstorming in existing projects", () => {
+    const { fs, json } = repository();
+    for (const directory of ["research", "brainstorming"]) {
+      const path = `/repo/docs/knowledge/${directory}`;
+      fs.unlinkSync(`${path}/README.md`);
+      fs.rmdirSync(path);
+    }
+
+    const research = json("knowledge", "add", "--type", "research", "--title", "Storage options");
+    expect(research).toMatchObject({
+      id: "RESEARCH-0001", status: "draft", file: "/repo/docs/knowledge/research/RESEARCH-0001-storage-options.md",
+    });
+    expect(research.body).toContain("## Sources");
+    expect(research.body).toContain("## Findings");
+    fs.writeFileSync(research.file, fs.readFileSync(research.file, "utf8") + "\nSQLite supports atomic commits.\n");
+
+    const brainstorm = json("knowledge", "add", "--type", "brainstorm", "--title", "Explore storage designs", "--related", research.id);
+    expect(brainstorm).toMatchObject({
+      id: "BRAINSTORM-0001", status: "draft", file: "/repo/docs/knowledge/brainstorming/BRAINSTORM-0001-explore-storage-designs.md",
+      metadata: { related: [research.id] },
+    });
+    expect(brainstorm.body).toContain("## Ideas set aside and why");
+    expect(fs.readFileSync("/repo/docs/knowledge/research/README.md", "utf8")).toContain("[RESEARCH-0001: Storage options]");
+    expect(fs.readFileSync("/repo/docs/knowledge/brainstorming/README.md", "utf8")).toContain("[BRAINSTORM-0001: Explore storage designs]");
+
+    expect(json("knowledge", "search", "storage", "--fields", "id").results)
+      .toEqual(expect.arrayContaining([{ id: research.id }, { id: brainstorm.id }]));
+    expect(json("knowledge", "search", "atomic", "--type", "research").results)
+      .toMatchObject([{ id: research.id, excerpt: "SQLite supports atomic commits." }]);
+    expect(json("knowledge", "list", "--type", "brainstorm", "--related-to", research.id, "--fields", "id"))
+      .toEqual([{ id: brainstorm.id }]);
+    expect(json("knowledge", "show", brainstorm.id, "--body")).toContain("# Explore storage designs");
+    expect(json("status").records).toMatchObject({ research: 1, brainstorms: 1 });
+
+    const adr = json("knowledge", "add", "--type", "adr", "--title", "Choose SQLite",
+      "--related", `${research.id}, ${brainstorm.id}`);
+    expect(adr.metadata.related).toEqual([research.id, brainstorm.id]);
+    expect(json("knowledge", "list", "--type", "adr", "--related-to", brainstorm.id, "--fields", "id"))
+      .toEqual([{ id: adr.id }]);
+  });
+
+  it("rejects invalid related IDs before creating a knowledge record", () => {
+    const { call, json } = repository();
+    const add = ["knowledge", "add", "--type", "research", "--title", "Storage options"];
+    expect(call(...add, "--related", "ADR-9999")).toMatchObject({ code: 1, error: "Unknown related record: ADR-9999" });
+    expect(call(...add, "--related", "ADR-0001,")).toMatchObject({ code: 1, error: expect.stringContaining("comma-separated") });
+    expect(json("knowledge", "list", "--type", "research")).toEqual([]);
   });
 
   it("searches stories and uses the scheduler's default priority", () => {
