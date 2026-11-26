@@ -11,4 +11,6 @@ This repository uses `agentctl` for work planning and task state. Pi loads this 
 
 Use `agentctl work` and `agentctl knowledge` instead of manually finding planning documents. Project context is declared in `.agentctl/project.yaml`; optional paths are references only.
 
+Find records with `agentctl knowledge search "topic"` or `agentctl work search "topic"`. Read a match with `show ID --body`. Use `agentctl knowledge --help` or `agentctl work --help` for filters and dependency lookup.
+
 Never silently modify accepted requirements, decisions or verification policy merely to pass a task. Never commit credentials or `.agentctl/runtime/`. Parallel worktrees require a shared coordinator.

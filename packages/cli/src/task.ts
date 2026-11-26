@@ -19,14 +19,18 @@ function identifiers(value: unknown, field: string): string[] {
   return value;
 }
 
-function blockers(task: RecordEntry, all: Map<string, RecordEntry>): string[] {
+export function taskDependencyIds(task: RecordEntry): string[] {
+  return [...new Set([...identifiers(task.metadata.depends_on, "depends_on"), ...identifiers(task.metadata.blocked_by, "blocked_by")])];
+}
+
+export function taskBlockers(task: RecordEntry, all: ReadonlyMap<string, RecordEntry>): string[] {
   const reasons: string[] = [];
   if (task.metadata.blocked === true) reasons.push("Explicitly blocked");
   const parent = task.metadata.parent;
   if (typeof parent !== "string" || all.get(parent)?.type !== "prd") {
     reasons.push(`Missing PRD parent: ${String(parent ?? "(none)")}`);
   }
-  for (const id of new Set([...identifiers(task.metadata.depends_on, "depends_on"), ...identifiers(task.metadata.blocked_by, "blocked_by")])) {
+  for (const id of taskDependencyIds(task)) {
     if (id === task.id) { reasons.push("Task depends on itself"); continue; }
     const dependency = all.get(id);
     if (!dependency) reasons.push(`Missing dependency: ${id}`);
@@ -36,7 +40,7 @@ function blockers(task: RecordEntry, all: Map<string, RecordEntry>): string[] {
 }
 
 /** Priority 1 is highest; missing priority is 3. IDs break ties. */
-function priority(task: RecordEntry): number {
+export function taskPriority(task: RecordEntry): number {
   const value = task.metadata.priority;
   if (value === undefined) return 3;
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 5) {
@@ -80,14 +84,14 @@ export function selectNextTask(fs: FileSystem, root: string): TaskSelection {
   const blocked: BlockedTask[] = [];
   const ready: RecordEntry[] = [];
   for (const task of candidates) {
-    const reasons = blockers(task, all);
+    const reasons = taskBlockers(task, all);
     if (reasons.length) blocked.push({ id: task.id, reasons });
     else ready.push(task);
   }
   if (!ready.length) {
     return { ok: false, code: "ALL_BLOCKED", message: "All pending tasks have unresolved blockers.", blocked };
   }
-  ready.sort((a, b) => priority(a) - priority(b) || a.id.localeCompare(b.id));
+  ready.sort((a, b) => taskPriority(a) - taskPriority(b) || a.id.localeCompare(b.id));
   return { ok: true, task: ready[0] };
 }
 
@@ -121,7 +125,7 @@ export function selectTaskById(fs: FileSystem, root: string, id: string): TaskSe
     };
   }
   const all = new Map(listRecords(fs, root).map((record) => [record.id, record]));
-  const reasons = blockers(task, all);
+  const reasons = taskBlockers(task, all);
   if (reasons.length) {
     return { ok: false, code: "TASK_BLOCKED", message: `${id} has unresolved blockers.`, blocked: [{ id, reasons }] };
   }

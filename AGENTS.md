@@ -14,6 +14,7 @@ This repository builds `agentctl` and uses it for its own planning. Pi loads thi
 ## Working conventions
 
 - Access durable planning and knowledge via `agentctl work`, `agentctl knowledge` and `agentctl task`.
+- Find records with `agentctl knowledge search "topic"` or `agentctl work search "topic"`. Read a match with `show ID --body`. Use `agentctl knowledge --help` or `agentctl work --help` for filters and dependency lookup.
 - Do not silently rewrite requirements, accepted decisions or trusted check policy.
 - Maintain stable record IDs and links; record design uncertainty explicitly.
 - Never commit secrets, transcripts or `.agentctl/runtime/`.

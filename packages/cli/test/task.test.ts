@@ -126,6 +126,22 @@ describe("deterministic task claiming", () => {
     expect(context.references).toContain("docs/decisions/" + proposed.id + "-unreviewed-approach.md");
   });
 
+  it("lists linked research and brainstorming as optional task references", () => {
+    const { fs, prd } = setup();
+    const research = addRecord(fs, "/repo", { type: "research", title: "Queries considered" });
+    const brainstorm = addRecord(fs, "/repo", { type: "brainstorm", title: "Possible designs" });
+    const story = addRecord(fs, "/repo", {
+      type: "story", title: "Build an index", parent: prd.id, related: [research.id, brainstorm.id],
+    });
+    expect(claimNextTask(fs, "/repo").ok).toBe(true);
+    const context = getActiveTaskContext(fs, "/repo", story.id);
+    expect(context.references).toEqual(expect.arrayContaining([
+      research.file.slice("/repo/".length), brainstorm.file.slice("/repo/".length),
+    ]));
+    expect(context.prompt).not.toContain("# Queries considered");
+    expect(context.prompt).not.toContain("# Possible designs");
+  });
+
   it("does not truncate a record if a leftover temporary file prevents the update", () => {
     const { fs, prd } = setup();
     const story = addRecord(fs, "/repo", { type: "story", title: "Crash protection", parent: prd.id });

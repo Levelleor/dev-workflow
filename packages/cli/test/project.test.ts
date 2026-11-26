@@ -12,6 +12,8 @@ describe("repository bootstrap", () => {
     expect(manifest).not.toContain("REPLACE_WITH_PROJECT_ID");
     expect(manifest).not.toMatch(/^project:/m);
     expect(fs.existsSync("/repo/docs/work/items/README.md")).toBe(true);
+    expect(fs.existsSync("/repo/docs/knowledge/research/README.md")).toBe(true);
+    expect(fs.existsSync("/repo/docs/knowledge/brainstorming/README.md")).toBe(true);
     const second = initialize();
     expect(second.created).toEqual([]);
     expect(second.skipped).toContain("AGENTS.md");

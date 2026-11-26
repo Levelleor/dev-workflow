@@ -1,6 +1,7 @@
 import { dirname, join, parse, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { FileSystem } from "./fs.js";
+import { recordTypes } from "./record-types.js";
 
 export function slug(value: string): string {
   return value.normalize("NFKD").toLowerCase()
@@ -48,19 +49,15 @@ export function initProject(fs: FileSystem, root: string, templateRoot: string):
     fs.writeFileSync(destination, content, { encoding: "utf8", flag: "wx" });
     created.push(relative);
   }
-  for (const relative of [
-    "docs/product/README.md",
-    "docs/decisions/README.md",
-    "docs/work/items/README.md",
-    "docs/knowledge/inbox/README.md",
-  ]) {
+  for (const { directory } of Object.values(recordTypes)) {
+    const relative = `${directory}/README.md`;
     const destination = join(root, relative);
     if (fs.existsSync(destination)) {
       skipped.push(relative);
       continue;
     }
     fs.mkdirSync(dirname(destination), { recursive: true });
-    const heading = relative.split("/").at(-2) ?? "Knowledge";
+    const heading = directory.split("/").at(-1);
     fs.writeFileSync(destination, `# ${heading}\n\nRecords are indexed here.\n`, { encoding: "utf8", flag: "wx" });
     created.push(relative);
   }
