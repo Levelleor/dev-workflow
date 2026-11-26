@@ -26,6 +26,7 @@ export function recordCommandHelp(command: Command): string {
     `${prefix} show ID [--body] [--json]`,
     ...(command === "knowledge" ? [
       `${prefix} add --type ${knowledgeAddTypes.join("|")} --title TEXT [--related ID[,ID...]]`,
+      `${prefix} add -h  Show section options and examples`,
       `${prefix} capture TEXT --source ID`,
       "",
       `Record types for lists and search: --type ${knowledgeTypes.join("|")}.`,

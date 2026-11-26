@@ -29,7 +29,7 @@ Archive completed plans or obsolete notes with traceable IDs; supersede ADRs rat
 
 ## Initial implementation status
 
-The CLI allocates record IDs, validates references supplied during creation, and appends category-index links. Repository-wide link linting, generated reverse indexes and merge-conflict reconciliation are **not yet implemented**. See [templates](../../templates/records/README.md).
+The CLI allocates record IDs, validates relationships and Markdown links during creation, and appends category-index links. Run `agentctl knowledge add -h` for supported section names and ways to supply their Markdown. Run `agentctl docs lint` or `agentctl doctor` to check frontmatter, record relationships, task notes, and local file and heading links after edits. External URLs are left to readers and do not require a network request. See [templates](../../templates/records/README.md).
 
 ## Verification gates and task-local notes
 

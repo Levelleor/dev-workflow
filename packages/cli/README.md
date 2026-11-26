@@ -8,7 +8,8 @@ The npm package is `@levelleor/agentctl` and the executable is `agentctl`. The p
 
 ```sh
 agentctl init                   # install templates without overwriting files
-agentctl doctor                 # inspect configuration readiness
+agentctl doctor                 # inspect configuration and documents
+agentctl docs lint --json       # verify frontmatter, relationships, and local links
 agentctl status --json          # machine-readable task counts
 agentctl knowledge add --type prd --title "My product"
 agentctl work add --title "First feature" --parent PRD-0001
@@ -28,6 +29,28 @@ agentctl verify --profile scaffold       # legacy named profile
 Commands operate on the project containing the current working directory. `init` works in a new or existing directory; it creates only missing files and never overwrites an existing `AGENTS.md`, document or configuration file.
 
 Record creation allocates stable IDs, validates required relationships and adds links to the relevant category index. New stories begin pending. Verification executes registered shell commands but is **not yet an isolated, security-hardened acceptance verifier** and does not issue signed revision-bound receipts.
+
+## Author records through the CLI
+
+Use `agentctl knowledge add -h`, `agentctl work add -h`, or `agentctl knowledge capture -h` for the available metadata flags, section names, and input examples. Add `--type adr` to knowledge creation help to list the ADR sections.
+
+```sh
+agentctl work add --title "Improve retries" --parent PRD-0001 \
+  --depends-on STORY-0001 \
+  --section 'outcome=Retry transient errors.' \
+  --section-file acceptance-criteria=criteria.md
+
+agentctl knowledge add --type adr --title "Choose SQLite" \
+  --section-file decision=- <<'MARKDOWN'
+> Use SQLite's WAL mode for concurrent reads.
+
+Set `journal_mode` explicitly at startup.
+MARKDOWN
+```
+
+Repeat `--section NAME=TEXT` or `--section-file NAME=PATH` for different sections. Use `NAME=-` with a single `--section-file` to read from stdin. File paths are relative to your working directory. Links in the content are relative to the generated document. The CLI generates frontmatter and headings, and uses empty sections for omitted content. Use `task notes add` for the story's managed Notes section.
+
+Run `agentctl docs lint` after direct edits. The scan checks Markdown under `docs/` and the workflow records it can reference under `workflows/`. It validates frontmatter, record IDs and relationships, task notes, repository paths, and Markdown heading anchors. It performs no network requests for external links. `doctor` includes the same diagnostics, and this repository runs the scan in its `docs` verification gate and CI.
 
 ## Record lookup
 

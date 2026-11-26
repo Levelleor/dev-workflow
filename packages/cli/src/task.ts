@@ -1,5 +1,6 @@
-import { join } from "node:path";
-import { writeFileAtomically, type FileSystem } from "./fs.js";
+import { isAlias, isScalar } from "yaml";
+import { withRecordLock, writeFileAtomically, type FileSystem } from "./fs.js";
+import { readFrontmatter } from "./frontmatter.js";
 import { listRecords, type RecordEntry } from "./records.js";
 import { buildTaskContext, type TaskContext } from "./context.js";
 
@@ -132,30 +133,16 @@ export function selectTaskById(fs: FileSystem, root: string, id: string): TaskSe
   return { ok: true, task };
 }
 
-export function withTaskLock<T>(fs: FileSystem, root: string, action: () => T): T {
-  const directory = join(root, ".agentctl", "runtime");
-  const lock = join(directory, "task.lock");
-  fs.mkdirSync(directory, { recursive: true });
-  try {
-    fs.mkdirSync(lock);
-  } catch {
-    throw new Error("Task operation is locked by another process. Only one local coordinator may claim or complete work at a time.");
-  }
-  try {
-    return action();
-  } finally {
-    fs.rmdirSync(lock);
-  }
-}
-
 function changeStatus(fs: FileSystem, record: RecordEntry, status: "in-progress" | "implemented"): void {
   const raw = fs.readFileSync(record.file, "utf8");
-  const match = /^(---\r?\n[\s\S]*?\r?\n---\r?\n)/.exec(raw);
-  if (!match) throw new Error(`Missing frontmatter for ${record.id}.`);
-  const front = match[1];
-  if (!/^status:\s*\S.*$/m.test(front)) throw new Error(`Missing status field in ${record.id}.`);
-  const updated = front.replace(/^status:\s*\S.*$/m, `status: ${status}`) + raw.slice(front.length);
-  writeFileAtomically(fs, record.file, updated);
+  const parsed = readFrontmatter(raw);
+  if (!parsed) throw new Error(`Missing frontmatter for ${record.id}.`);
+  const field = parsed.document.get("status", true);
+  if ((!isScalar(field) && !isAlias(field)) || !field.range) throw new Error(`Missing status field in ${record.id}.`);
+  const start = parsed.start + field.range[0];
+  const end = parsed.start + field.range[1];
+  const newline = /\r?\n$/.exec(raw.slice(start, end))?.[0] ?? "";
+  writeFileAtomically(fs, record.file, raw.slice(0, start) + status + newline + raw.slice(end));
 }
 
 function activeTask(fs: FileSystem, root: string, id?: string): RecordEntry {
@@ -173,7 +160,7 @@ export type ClaimResult =
   | Extract<TaskSelection, { ok: false }>;
 
 export function claimTask(fs: FileSystem, root: string, id: string): ClaimResult {
-  return withTaskLock(fs, root, () => {
+  return withRecordLock(fs, root, () => {
     const choice = id === "next" ? selectNextTask(fs, root) : selectTaskById(fs, root, id);
     if (!choice.ok) return choice;
     // Claiming changes task state only. getcontext assembles the full assignment.
@@ -194,7 +181,7 @@ export function getActiveTaskContext(fs: FileSystem, root: string, id?: string):
 }
 
 export function completeTask(fs: FileSystem, root: string, id?: string): RecordEntry {
-  return withTaskLock(fs, root, () => {
+  return withRecordLock(fs, root, () => {
     const task = activeTask(fs, root, id);
     changeStatus(fs, task, "implemented");
     return { ...task, status: "implemented", metadata: { ...task.metadata, status: "implemented" } };

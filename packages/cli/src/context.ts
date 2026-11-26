@@ -1,6 +1,7 @@
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { parse as parseYaml } from "yaml";
 import type { FileSystem } from "./fs.js";
+import { workflowReferences } from "./documents.js";
+import { readFrontmatter } from "./frontmatter.js";
 import { readYaml } from "./project.js";
 import { listRecords, type RecordEntry } from "./records.js";
 
@@ -87,9 +88,15 @@ export function buildTaskContext(fs: FileSystem, root: string, task: RecordEntry
   include(fileOf(task), taskDocs, true, task.id);
   include(fileOf(parent), taskDocs, true, parent.id);
 
+  const workflows = new Map(workflowReferences(fs, root).map((record) => [record.id, record.file]));
   for (const id of new Set([...ids(task.metadata.related), ...ids(parent.metadata.related)])) {
     const record = byId.get(id);
-    if (!record) throw new Error(`Broken context relationship: ${id}`);
+    if (!record) {
+      const workflow = workflows.get(id);
+      if (!workflow) throw new Error(`Broken context relationship: ${id}`);
+      optional.add(relative(root, workflow).replaceAll("\\", "/"));
+      continue;
+    }
     const path = fileOf(record);
     if (record.type === "research" || record.type === "brainstorm" || (record.type === "adr" && record.status !== "accepted")) {
       optional.add(path);
@@ -108,12 +115,11 @@ export function buildTaskContext(fs: FileSystem, root: string, task: RecordEntry
     for (const name of fs.readdirSync(plansDir).filter((name) => name.endsWith(".md") && name !== "README.md").sort()) {
       const path = `docs/work/plans/${name}`;
       const content = fs.readFileSync(safePath(root, path), "utf8");
-      const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
-      if (!match) continue;
-      const header: unknown = parseYaml(match[1]);
-      if (header && typeof header === "object" && !Array.isArray(header)) {
-        const metadata = header as Record<string, unknown>;
-        if (metadata.parent === task.id && metadata.status !== "archived") include(path, taskDocs, false);
+      try {
+        const metadata = readFrontmatter(content)?.metadata;
+        if (metadata?.parent === task.id && metadata.status !== "archived") include(path, taskDocs, false);
+      } catch (error) {
+        throw new Error(`${path}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
