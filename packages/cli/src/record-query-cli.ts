@@ -1,11 +1,12 @@
+import { flag, type Flags } from "./cli-arguments.js";
+import type { CommandDefinition } from "./cli-command.js";
 import type { FileSystem } from "./fs.js";
 import { findRecord, listRecords, type RecordEntry, type RecordType } from "./records.js";
-import { knowledgeAddTypes, knowledgeTypes } from "./record-types.js";
+import { knowledgeTypes } from "./record-types.js";
 import { isCalendarDate, matchesRecord, recordBody, searchRecords, storyById, walkDependencies } from "./record-query.js";
 import { taskBlockers } from "./task.js";
 
-type Command = "knowledge" | "work";
-type Flags = Readonly<Record<string, string | boolean>>;
+type RecordGroup = "knowledge" | "work";
 
 const recordFields = ["id", "title", "type", "status", "body"] as const;
 const metadataFields = [
@@ -18,23 +19,12 @@ const filterFlags = [
 const workFilters = ["priority", "depends-on", "dependencies-of", "transitive"];
 const booleanFlags = ["json", "body", "transitive"];
 
-export function recordCommandHelp(command: Command): string {
-  const prefix = `agentctl ${command}`;
+function filterHelp(group: RecordGroup): string {
   return [
-    `${prefix} search TEXT [filters] [--fields LIST] [--limit N] [--json]`,
-    `${prefix} list [filters] [--fields LIST] [--limit N] [--json]`,
-    `${prefix} show ID [--body] [--json]`,
-    ...(command === "knowledge" ? [
-      `${prefix} add --type ${knowledgeAddTypes.join("|")} --title TEXT [--related ID[,ID...]]`,
-      `${prefix} add -h  Show section options and examples`,
-      `${prefix} capture TEXT --source ID`,
-      "",
+    ...(group === "knowledge" ? [
       `Record types for lists and search: --type ${knowledgeTypes.join("|")}.`,
       "Use research for evidence and findings, brainstorm for ideas, and adr for architectural decisions.",
     ] : [
-      `${prefix} blockers STORY-ID [--json]`,
-      `${prefix} add --title TEXT --parent PRD-ID`,
-      "",
       "--priority 1..5 matches story priority (default 3).",
       "--depends-on STORY-ID finds stories that depend on this story.",
       "--dependencies-of STORY-ID finds stories this story depends on.",
@@ -45,17 +35,31 @@ export function recordCommandHelp(command: Command): string {
     "--created-since, --accepted-since include the date (YYYY-MM-DD).",
     "--created-before, --accepted-before exclude the date. Undated records are skipped.",
     "--fields takes comma-separated names: " + [...recordFields, ...metadataFields].join(", ") + ".",
-    "Search also supports the excerpt field. Search defaults to 10 results. Lists can use --limit.",
-    "--body returns the Markdown body without YAML frontmatter.",
+  ].join("\n");
+}
+
+const bodyHelp = "--body returns the Markdown body without YAML frontmatter.";
+
+function listExample(group: RecordGroup): string {
+  return group === "work" ? "agentctl work list --dependencies-of STORY-0001 --fields id,title,body"
+    : "agentctl knowledge list --type note --source STORY-0001";
+}
+
+function searchExample(group: RecordGroup): string {
+  return group === "work" ? 'agentctl work search "verification gate" --parent PRD-0001'
+    : 'agentctl knowledge search "task claims" --type adr --status accepted';
+}
+
+export function recordLookupDetails(group: RecordGroup): string {
+  return [
+    filterHelp(group),
+    "Search also supports the excerpt field and defaults to 10 results. Lists can use --limit.",
+    bodyHelp,
     "",
-    "Examples:",
-    ...(command === "knowledge" ? [
-      `  ${prefix} search "task claims" --type adr --status accepted`,
-      `  ${prefix} show ADR-0001 --body`,
-    ] : [
-      `  ${prefix} list --parent PRD-0001 --status proposed`,
-      `  ${prefix} list --dependencies-of STORY-0001 --fields id,title,body`,
-    ]),
+    "Examples",
+    `  ${searchExample(group)}`,
+    `  ${listExample(group)}`,
+    `  agentctl ${group} show ${group === "work" ? "STORY-0001" : "ADR-0001"} --body`,
   ].join("\n");
 }
 
@@ -70,13 +74,8 @@ function validateFlags(flags: Flags, allowed: readonly string[]): void {
   }
 }
 
-function valueOf(flags: Flags, name: string): string | undefined {
-  const value = flags[name];
-  return typeof value === "string" ? value : undefined;
-}
-
 function integerOption(flags: Flags, name: string, max = Number.MAX_SAFE_INTEGER): number | undefined {
-  const value = valueOf(flags, name);
+  const value = flag(flags, name);
   if (value === undefined) return undefined;
   const number = Number(value);
   if (!/^\d+$/.test(value) || number < 1 || number > max) {
@@ -86,12 +85,12 @@ function integerOption(flags: Flags, name: string, max = Number.MAX_SAFE_INTEGER
 }
 
 function dateOption(flags: Flags, name: string): string | undefined {
-  const value = valueOf(flags, name);
+  const value = flag(flags, name);
   if (value !== undefined && !isCalendarDate(value)) throw new Error(`--${name} requires a valid YYYY-MM-DD date.`);
   return value;
 }
 
-function listType(command: Command, value?: string): RecordType | undefined {
+function listType(command: RecordGroup, value?: string): RecordType | undefined {
   if (command === "work") {
     if (value && value !== "story") throw new Error("Use --type story with work commands.");
     return "story";
@@ -130,30 +129,28 @@ function renderFields(row: Record<string, unknown>): string {
 }
 
 function readList(
-  fs: FileSystem, root: string, command: Command, action: "list" | "search", args: string[], flags: Flags,
+  fs: FileSystem, root: string, command: RecordGroup, action: "list" | "search", args: string[], flags: Flags, usage: string,
 ): unknown {
   const searching = action === "search";
-  if (args.length !== (searching ? 1 : 0)) {
-    throw new Error(`Usage: agentctl ${command} ${action}${searching ? " TEXT" : ""} [filters]`);
-  }
+  if (args.length !== (searching ? 1 : 0)) throw new Error(`Usage: ${usage}`);
   validateFlags(flags, command === "work" ? [...filterFlags, ...workFilters] : filterFlags);
-  const type = listType(command, valueOf(flags, "type"));
-  const fields = selectedFields(valueOf(flags, "fields"), searching);
+  const type = listType(command, flag(flags, "type"));
+  const fields = selectedFields(flag(flags, "fields"), searching);
   const limit = integerOption(flags, "limit") ?? (searching ? 10 : undefined);
   const filters = {
-    status: valueOf(flags, "status"),
-    parent: valueOf(flags, "parent"),
+    status: flag(flags, "status"),
+    parent: flag(flags, "parent"),
     priority: integerOption(flags, "priority", 5),
-    relatedTo: valueOf(flags, "related-to"),
-    source: valueOf(flags, "source"),
-    supersedes: valueOf(flags, "supersedes"),
+    relatedTo: flag(flags, "related-to"),
+    source: flag(flags, "source"),
+    supersedes: flag(flags, "supersedes"),
     createdSince: dateOption(flags, "created-since"),
     createdBefore: dateOption(flags, "created-before"),
     acceptedSince: dateOption(flags, "accepted-since"),
     acceptedBefore: dateOption(flags, "accepted-before"),
   };
-  const dependency = valueOf(flags, "depends-on");
-  const dependent = valueOf(flags, "dependencies-of");
+  const dependency = flag(flags, "depends-on");
+  const dependent = flag(flags, "dependencies-of");
   if (dependency && dependent) throw new Error("Use either --depends-on or --dependencies-of.");
   const anchor = dependency ?? dependent;
   if (flags.transitive && !anchor) throw new Error("--transitive requires --depends-on or --dependencies-of.");
@@ -189,24 +186,64 @@ function readList(
   return lines.join(fields?.includes("body") ? "\n\n" : "\n") || empty;
 }
 
-export function readRecordCommand(
-  fs: FileSystem, root: string, command: Command, action: string, args: string[], flags: Flags,
-): unknown {
-  if (action === "list" || action === "search") return readList(fs, root, command, action, args, flags);
+export function recordLookupCommands(group: RecordGroup): CommandDefinition[] {
+  return [
+    {
+      name: "list",
+      summary: "List records matching the supplied filters.",
+      syntax: "[filters] [--fields LIST] [--limit N] [--json]",
+      details: `${filterHelp(group)}\n\nExample: ${listExample(group)}`,
+      run({ fs, root, args, flags, emit, usage }) {
+        emit(readList(fs, root, group, "list", args, flags, usage));
+        return 0;
+      },
+    },
+    {
+      name: "search",
+      summary: "Search record IDs, titles, and bodies.",
+      syntax: "TEXT [filters] [--fields LIST] [--limit N] [--json]",
+      details: [
+        filterHelp(group),
+        "Search ranks matches and includes a short excerpt. It defaults to 10 results.",
+        "The excerpt field is also available with --fields.",
+        "",
+        `Example: ${searchExample(group)}`,
+      ].join("\n"),
+      run({ fs, root, args, flags, emit, usage }) {
+        emit(readList(fs, root, group, "search", args, flags, usage));
+        return 0;
+      },
+    },
+    {
+      name: "show",
+      summary: "Read one record by stable ID.",
+      syntax: "ID [--body] [--json]",
+      details: `${bodyHelp} Use --json for structured output.`,
+      run({ fs, root, args, flags, emit, usage }) {
+        if (args.length !== 1 || !args[0]) throw new Error(`Usage: ${usage}`);
+        validateFlags(flags, ["body"]);
+        const record = findRecord(fs, root, args[0]);
+        if (group === "work" && record.type !== "story") throw new Error(`Not a story: ${record.id}`);
+        emit(flags.body ? recordBody(record) : flags.json ? record : fs.readFileSync(record.file, "utf8"));
+        return 0;
+      },
+    },
+  ];
+}
 
-  if (args.length !== 1 || !args[0]) throw new Error(`Usage: agentctl ${command} ${action} ID`);
-  const [id] = args;
-  if (action === "blockers") {
+export const workBlockersCommand: CommandDefinition = {
+  name: "blockers",
+  summary: "Explain what blocks a story from being claimed.",
+  syntax: "STORY-ID [--json]",
+  details: "Uses the same dependency and eligibility rules as task claim.",
+  run({ fs, root, args, flags, emit, usage }) {
+    if (args.length !== 1 || !args[0]) throw new Error(`Usage: ${usage}`);
     validateFlags(flags, []);
+    const [id] = args;
     const records = listRecords(fs, root);
     const task = storyById(records, id);
     const reasons = taskBlockers(task, new Map(records.map((record) => [record.id, record])));
-    return flags.json ? { id, reasons } : reasons.length ? reasons.join("\n") : `No blockers for ${id}.`;
-  }
-
-  validateFlags(flags, ["body"]);
-  const record = findRecord(fs, root, id);
-  if (command === "work" && record.type !== "story") throw new Error(`Not a story: ${record.id}`);
-  if (flags.body) return recordBody(record);
-  return flags.json ? record : fs.readFileSync(record.file, "utf8");
-}
+    emit(flags.json ? { id, reasons } : reasons.length ? reasons.join("\n") : `No blockers for ${id}.`);
+    return 0;
+  },
+};

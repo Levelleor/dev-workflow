@@ -14,10 +14,10 @@ describe("verification CLI", () => {
       fs, cwd: "/repo", runner,
       output: (v) => output.push(v), error: (v) => errors.push(v),
     });
-    expect(run(["verify", "add", "browser", "--timeout", "600", "--json", "--",
-      "npx", "playwright", "test", "--headed"])).toBe(0);
+    expect(run(["--json", "verify", "add", "browser", "--timeout", "600", "--",
+      "npx", "playwright", "test", "--headed", "-h", "--help"])).toBe(0);
     expect(JSON.parse(output.at(-1)!)).toEqual({
-      name: "browser", command: "npx playwright test --headed", timeoutSeconds: 600,
+      name: "browser", command: "npx playwright test --headed -h --help", timeoutSeconds: 600,
     });
     expect(run(["verify", "list", "--json"])).toBe(0);
     const listed = JSON.parse(output.at(-1)!);
@@ -28,7 +28,7 @@ describe("verification CLI", () => {
     expect(result.checks[0]).toMatchObject({
       name: "browser", passed: true, stdout: "one passed", exitCode: 0,
     });
-    expect(runner).toHaveBeenCalledWith("npx playwright test --headed", "/repo", 600000);
+    expect(runner).toHaveBeenCalledWith("npx playwright test --headed -h --help", "/repo", 600000);
     expect(errors).toEqual([]);
   });
 

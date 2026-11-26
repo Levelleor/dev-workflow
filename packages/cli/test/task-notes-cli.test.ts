@@ -40,5 +40,7 @@ describe("task notes CLI", () => {
     expect(run(["task", story.id, "notes", "add", "Pending note"])).toBe(0);
     expect(run(["task", story.id, "notes", "list"])).toBe(0);
     expect(output.at(-1)).toContain("N001: Pending note");
+    expect(run(["task", story.id, "notes", "add", "--", "-h"])).toBe(0);
+    expect(output.at(-1)).toBe("Added N002: -h");
   });
 });
