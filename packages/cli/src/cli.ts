@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 import type { FileSystem } from "./fs.js";
 import { disk } from "./fs.js";
 import { findProjectRoot, initProject, readYaml } from "./project.js";
-import { addRecord, findRecord, listRecords, type RecordType } from "./records.js";
+import { addRecord, listRecords } from "./records.js";
+import { readRecordCommand, recordCommandHelp } from "./record-query-cli.js";
 import { getSetting, setSetting, showConfig } from "./config.js";
 import { addGate, listGates, runCommand, verify, type RunCommand } from "./verify.js";
 import { addTaskNote, listTaskNotes, removeTaskNote } from "./task-notes.js";
@@ -32,11 +33,9 @@ Usage:
   agentctl task notes list [--json]                  List notes on the current task
   agentctl task notes remove N001                    Remove a task note
   agentctl task STORY-0001 notes add|list|remove     Address a task by stable ID
-  agentctl work list|show ID|add --title T --parent PRD-ID
-  agentctl knowledge list [--type prd|adr|note]
-  agentctl knowledge show ID
-  agentctl knowledge add --type prd|adr --title TEXT
-  agentctl knowledge capture TEXT --source ID
+  agentctl work list|search TEXT|show ID|blockers ID|add
+  agentctl knowledge list|search TEXT|show ID|add|capture
+  agentctl knowledge --help | agentctl work --help    Show lookup options and examples
   agentctl config show|get KEY|set KEY VALUE
   agentctl verify [--json]                          Run every registered gate
   agentctl verify list [--json]                     List verification gates
@@ -71,7 +70,7 @@ function argumentsOf(argv: string[]): { args: string[]; flags: Record<string, Fl
     const [name, inline] = token.slice(2).split("=", 2);
     if (!/^[a-z][\w-]*$/.test(name)) throw new Error(`Invalid option: ${token}`);
     if (inline !== undefined) flags[name] = inline;
-    else if (["json", "help", "version"].includes(name)) flags[name] = true;
+    else if (["json", "help", "version", "body", "transitive"].includes(name)) flags[name] = true;
     else if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) flags[name] = argv[++i];
     else flags[name] = true;
   }
@@ -106,7 +105,11 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
     const emit = (value: unknown) => output(json ? JSON.stringify(value, null, 2) : typeof value === "string" ? value : JSON.stringify(value, null, 2));
 
     if (command === "version" || flags.version === true) { output("agentctl 0.1.0"); return 0; }
-    if (!command || command === "help" || flags.help === true) { output(help); return 0; }
+    if (!command || command === "help" || flags.help === true) {
+      const topic = command === "help" ? action : command;
+      output(topic === "knowledge" || topic === "work" ? recordCommandHelp(topic) : help);
+      return 0;
+    }
 
     if (command === "init") {
       emit(initProject(fs, action ? resolve(cwd, action) : cwd, templates));
@@ -188,31 +191,21 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
       throw new Error("Usage: agentctl task claim <ID|next> | task getcontext [ID] | task complete [ID]");
     }
 
+    if ((command === "work" || command === "knowledge")
+      && (action === "list" || action === "search" || action === "show" || (command === "work" && action === "blockers"))) {
+      emit(readRecordCommand(fs, root, command, action, rest, flags));
+      return 0;
+    }
+
     if (command === "work") {
-      if (action === "list") {
-        const records = listRecords(fs, root, "story");
-        emit(json ? records.map(({ id, title, status, metadata }) => ({ id, title, status, parent: metadata.parent })) : records.map((r) => `${r.id} [${r.status}] ${r.title}`).join("\n") || "No stories.");
-      } else if (action === "show") {
-        const record = findRecord(fs, root, requireArg(rest[0], "agentctl work show ID"));
-        if (record.type !== "story") throw new Error(`Not a story: ${record.id}`);
-        emit(json ? record : fs.readFileSync(record.file, "utf8"));
-      } else if (action === "add") {
-        const record = addRecord(fs, root, { type: "story", title: requireArg(flag(flags, "title"), "agentctl work add --title TEXT --parent PRD-ID"), parent: flag(flags, "parent") });
-        emit(json ? record : `Created ${record.id}: ${record.file}`);
-      } else throw new Error("Usage: agentctl work list|show|add");
+      if (action !== "add") throw new Error("Usage: agentctl work list|search|show|blockers|add");
+      const record = addRecord(fs, root, { type: "story", title: requireArg(flag(flags, "title"), "agentctl work add --title TEXT --parent PRD-ID"), parent: flag(flags, "parent") });
+      emit(json ? record : `Created ${record.id}: ${record.file}`);
       return 0;
     }
 
     if (command === "knowledge") {
-      if (action === "list") {
-        const type = flag(flags, "type");
-        if (type && !["prd", "adr", "note"].includes(type)) throw new Error("Invalid knowledge record type.");
-        const records = listRecords(fs, root, type as RecordType | undefined).filter((r) => r.type !== "story");
-        emit(json ? records.map(({ id, title, type, status }) => ({ id, title, type, status })) : records.map((r) => `${r.id} [${r.status}] ${r.title}`).join("\n") || "No knowledge records.");
-      } else if (action === "show") {
-        const record = findRecord(fs, root, requireArg(rest[0], "agentctl knowledge show ID"));
-        emit(json ? record : fs.readFileSync(record.file, "utf8"));
-      } else if (action === "add") {
+      if (action === "add") {
         const type = flag(flags, "type");
         if (type !== "prd" && type !== "adr") throw new Error("Use --type prd or --type adr.");
         const record = addRecord(fs, root, { type, title: requireArg(flag(flags, "title"), "agentctl knowledge add --type prd|adr --title TEXT") });
@@ -220,7 +213,7 @@ export function runCli(argv: string[], options: CliOptions = {}): number {
       } else if (action === "capture") {
         const record = addRecord(fs, root, { type: "note", title: requireArg(rest[0], "agentctl knowledge capture TEXT --source ID"), source: flag(flags, "source") });
         emit(json ? record : `Captured ${record.id}: ${record.file}`);
-      } else throw new Error("Usage: agentctl knowledge list|show|add|capture");
+      } else throw new Error("Usage: agentctl knowledge list|search|show|add|capture");
       return 0;
     }
 

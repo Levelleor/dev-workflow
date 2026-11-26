@@ -29,6 +29,28 @@ Commands operate on the project containing the current working directory. `init`
 
 Record creation allocates stable IDs, validates required relationships and adds links to the relevant category index. New stories begin pending. Verification executes registered shell commands but is **not yet an isolated, security-hardened acceptance verifier** and does not issue signed revision-bound receipts.
 
+## Record lookup
+
+```sh
+agentctl knowledge search "task claims" --type adr --status accepted
+agentctl knowledge show ADR-0001 --body
+agentctl knowledge list --type note --source STORY-0001
+agentctl work search "verification gate" --parent PRD-0001
+agentctl work list --depends-on STORY-0001
+agentctl work list --dependencies-of STORY-0001 --transitive --fields id,title,body
+agentctl work blockers STORY-0001
+```
+
+Search matches all words case-insensitively across a record's ID, title, and body. It ranks title matches higher and returns a short matching excerpt when available. Search defaults to 10 results. Use `--limit N` to change the search limit or cap a list. Search and limited lists return `{ results, total, hasMore }` in JSON. Lists without a limit return arrays.
+
+Filters combine with AND. Use `--related-to ID` and `--supersedes ID` to match IDs in those frontmatter lists, and `--source ID` or `--parent ID` to match a record's source or parent. Stories also support `--priority 1..5`, with missing priority treated as 3.
+
+Date filters use `created_at` and `accepted_at` in `YYYY-MM-DD` format. The `--created-since` and `--accepted-since` bounds include the specified day. The `--created-before` and `--accepted-before` bounds exclude it. New records get a UTC creation date. Add `accepted_at` when recording acceptance. Undated records are skipped when filtering on that date.
+
+Dependency lookup uses the story IDs in `depends_on` and `blocked_by`. It follows direct links by default. Add `--transitive` for indirect links. Other filters apply to the returned stories. `work blockers` reports unresolved dependencies and other blockers using the task claimer's rules.
+
+Use `--fields` to select comma-separated fields for results. `show ID --body` returns the Markdown with no frontmatter. With `--json`, the body is returned as a JSON string. See `agentctl knowledge --help` or `agentctl work --help` for the available filters and fields.
+
 ## Development
 
 Requires Node.js 24 or newer. From the monorepo root:

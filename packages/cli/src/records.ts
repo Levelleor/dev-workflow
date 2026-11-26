@@ -102,6 +102,7 @@ export function addRecord(fs: FileSystem, root: string, input: NewRecord): Recor
   const file = join(dir, `${id}-${slug(title)}.md`);
   const metadata: Record<string, unknown> = {
     id, type: input.type, status: input.type === "note" ? "inbox" : input.type === "story" ? "pending" : "proposed",
+    created_at: new Date().toISOString().slice(0, 10),
   };
   if (input.parent) metadata.parent = input.parent;
   if (input.source) metadata.source = input.source;
