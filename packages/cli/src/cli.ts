@@ -38,7 +38,8 @@ const versionCommand: CommandDefinition = {
   summary: "Print the agentctl version. Also available as --version.",
   standalone: true,
   run({ output }) {
-    output("agentctl 0.1.0");
+    const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    output(`agentctl ${manifest.version}`);
     return 0;
   },
 };

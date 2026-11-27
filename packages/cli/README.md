@@ -2,7 +2,9 @@
 
 **Status:** working CLI foundation for repository setup and knowledge records. Ultracode agent execution is not yet connected.
 
-The npm package is `@levelleor/agentctl` and the executable is `agentctl`. The package remains `private: true` until publishing is approved. After publishing, `npx @levelleor/agentctl --help` will execute the packaged binary.
+The npm package is `@levelleor/agentctl` and the executable is `agentctl`. Once a version is published, run `npx @levelleor/agentctl --help` to use it.
+
+The CLI and its bundled repository templates are licensed under the [Apache License, Version 2.0](LICENSE).
 
 ## Commands
 
@@ -99,6 +101,31 @@ node packages/cli/dist/index.js --help
 Unit tests use Vitest and memfs, injected into the CLI's filesystem interface; no real repositories or cloud services are touched.
 
 The production CLI is built with TypeScript and includes its repository templates in `dist/templates/`. See [architecture](../../docs/architecture/overview.md).
+
+## Publishing
+
+The version in this workspace's `package.json` is the release version. On a release preparation branch, run the following from the monorepo root with the version you intend to publish. Commit the manifest and lockfile and merge the change to `main`.
+
+```sh
+npm version 0.2.0 --workspace @levelleor/agentctl --no-git-tag-version --package-lock-only --ignore-scripts
+```
+
+Tag the reviewed `main` commit that contains the matching version and push the tag. That starts [Publish agentctl to npm](../../.github/workflows/publish-agentctl.yml).
+
+```sh
+git switch main
+git pull --ff-only
+git tag agentctl-v0.2.0
+git push origin agentctl-v0.2.0
+```
+
+The workflow builds the tagged commit, runs the `release` verification profile, and exercises the installed tarball before publishing it to npm. A manual run from `main` requires its checked-out commit to match the tag. To rerun a failed release, use **Re-run failed jobs** on the original run, or dispatch with `gh workflow run publish-agentctl.yml --ref agentctl-v0.2.0` after the workflow has run once.
+
+### npm setup
+
+On npmjs.com, configure a [GitHub Actions trusted publisher](https://docs.npmjs.com/trusted-publishers/) for `@levelleor/agentctl` with owner `Levelleor`, repository `dev-workflow`, workflow filename `publish-agentctl.yml`, and permission for direct `npm publish`. Complete a workflow publish within two days of adding the trusted publisher.
+
+For a new package, an npm scope maintainer can publish the first version interactively. Push the release tag and download the verified `agentctl-VERSION` artifact from the workflow run. Once the verification steps pass, extract that artifact and run `npm publish ./levelleor-agentctl-VERSION.tgz --access public` with an authenticated npm account. Configure the trusted publisher when the next version is ready to ship.
 
 ## Sequential task workflow
 

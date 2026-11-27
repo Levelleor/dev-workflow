@@ -11,7 +11,7 @@ checks:
 profiles:
   scaffold: [scaffold]
   feature: []     # Must be defined and nonempty before feature acceptance.
-  release: []     # Must be defined and nonempty before publishing.
+  release: [docs, scaffold]
 
 # Missing or empty named profiles must never produce a successful verification.
 policy:

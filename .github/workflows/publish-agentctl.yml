@@ -1,0 +1,86 @@
+name: Publish agentctl to npm
+
+on:
+  push:
+    tags: ['agentctl-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-agentctl
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Levelleor/dev-workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Verify release commit and version
+        run: |
+          version=$(node -p 'require("./packages/cli/package.json").version')
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Expected a stable X.Y.Z version in packages/cli/package.json."
+            exit 1
+          fi
+          tag="agentctl-v$version"
+          commit=$(git rev-parse HEAD)
+          if [[ "$GITHUB_REF" != "refs/tags/$tag" && "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "Select main or the matching tag $tag."
+            exit 1
+          fi
+          if ! tag_commit=$(git rev-parse --quiet --verify "refs/tags/$tag^{commit}") || [[ "$tag_commit" != "$commit" ]]; then
+            echo "Tag $tag must point to the exact commit selected for publishing."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$commit" origin/main; then
+            echo "The release commit must be in main's history."
+            exit 1
+          fi
+          echo "AGENTCTL_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build and verify the release
+        run: |
+          npm run typecheck
+          npm run build
+          node packages/cli/dist/index.js verify --profile release
+      - name: Pack and test the installed CLI
+        run: |
+          temporary=$(mktemp -d)
+          tarball=$(npm pack --workspace @levelleor/agentctl --pack-destination "$RUNNER_TEMP")
+          tarball="$RUNNER_TEMP/$tarball"
+          npm install --prefix "$temporary" --ignore-scripts --no-audit --no-fund "$tarball"
+          cli="$temporary/node_modules/.bin/agentctl"
+          test "$("$cli" --version)" = "agentctl $AGENTCTL_VERSION"
+          test -f "$temporary/node_modules/@levelleor/agentctl/LICENSE"
+          mkdir "$temporary/project"
+          "$cli" init "$temporary/project"
+          test -f "$temporary/project/AGENTS.md"
+          (cd "$temporary/project" && "$cli" doctor)
+          echo "AGENTCTL_TARBALL=$tarball" >> "$GITHUB_ENV"
+      - name: Save the verified tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentctl-${{ env.AGENTCTL_VERSION }}
+          path: ${{ env.AGENTCTL_TARBALL }}
+          if-no-files-found: error
+          overwrite: true
+      - name: Publish to npm
+        run: |
+          npm publish "$AGENTCTL_TARBALL" --provenance --access public
+          echo "Published \`@levelleor/agentctl@$AGENTCTL_VERSION\` from \`$(git rev-parse HEAD)\`." >> "$GITHUB_STEP_SUMMARY"
