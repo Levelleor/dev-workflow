@@ -1,4 +1,7 @@
 import { isAlias, isScalar } from "yaml";
+import { randomUUID } from "node:crypto";
+import { join } from "node:path";
+import { listGates, runGates, type Gate, type RunCommand, type VerifyResult } from "./verify.js";
 import { withRecordLock, writeFileAtomically, type FileSystem } from "./fs.js";
 import { readFrontmatter } from "./frontmatter.js";
 import { listRecords, type RecordEntry } from "./records.js";
@@ -159,11 +162,37 @@ export type ClaimResult =
   | { ok: true; task: { id: string; title: string; status: "in-progress" } }
   | Extract<TaskSelection, { ok: false }>;
 
+type ClaimBaseline = { id: string; nonce: string; gates: Gate[] };
+
+function baselinePath(root: string): string {
+  return join(root, ".agentctl", "runtime", "task-claim.json");
+}
+
+function checksPath(root: string): string {
+  return join(root, ".agentctl", "checks.yaml");
+}
+
+function readBaseline(raw: string, id: string): ClaimBaseline {
+  const value = JSON.parse(raw) as ClaimBaseline;
+  if (!value || value.id !== id || typeof value.nonce !== "string" || !value.nonce ||
+      !Array.isArray(value.gates) || value.gates.some((gate) =>
+        !gate || typeof gate.name !== "string" || !/^[a-z][a-z0-9-]*$/.test(gate.name) ||
+        typeof gate.command !== "string" || !gate.command.trim() ||
+        !Number.isInteger(gate.timeoutSeconds) || gate.timeoutSeconds < 1) ||
+      new Set(value.gates.map((gate) => gate.name)).size !== value.gates.length) {
+    throw new Error("Invalid or mismatched claim-time verification baseline.");
+  }
+  return value;
+}
+
 export function claimTask(fs: FileSystem, root: string, id: string): ClaimResult {
   return withRecordLock(fs, root, () => {
     const choice = id === "next" ? selectNextTask(fs, root) : selectTaskById(fs, root, id);
     if (!choice.ok) return choice;
-    // Claiming changes task state only. getcontext assembles the full assignment.
+    // Persist the baseline before claiming; a failed status write leaves only an
+    // orphan snapshot, which the next successful claim replaces under this lock.
+    const baseline: ClaimBaseline = { id: choice.task.id, nonce: randomUUID(), gates: listGates(fs, root) };
+    writeFileAtomically(fs, baselinePath(root), JSON.stringify(baseline));
     changeStatus(fs, choice.task, "in-progress");
     return {
       ok: true,
@@ -180,10 +209,73 @@ export function getActiveTaskContext(fs: FileSystem, root: string, id?: string):
   return buildTaskContext(fs, root, activeTask(fs, root, id));
 }
 
-export function completeTask(fs: FileSystem, root: string, id?: string): RecordEntry {
-  return withRecordLock(fs, root, () => {
+export type CompletionResult =
+  | { ok: true; id: string; status: "implemented"; verification: VerifyResult }
+  | { ok: false; id: string; status?: "in-progress"; code: string; message: string; verification?: VerifyResult };
+
+function refusal(id: string, code: string, message: string, verification?: VerifyResult,
+  status: "in-progress" | undefined = "in-progress"): CompletionResult {
+  return { ok: false, id, status, code, message, ...(verification ? { verification } : {}) };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function completeTask(fs: FileSystem, root: string, id?: string, runner?: RunCommand): CompletionResult {
+  // Do not hold the record lock while executing arbitrary project commands.
+  const attempt = withRecordLock(fs, root, () => {
     const task = activeTask(fs, root, id);
-    changeStatus(fs, task, "implemented");
-    return { ...task, status: "implemented", metadata: { ...task.metadata, status: "implemented" } };
+    try {
+      if (!fs.existsSync(baselinePath(root))) {
+        return refusal(task.id, "MISSING_BASELINE",
+          "Missing claim-time verification baseline. Have the coordinator review policy and re-claim the task.");
+      }
+      const baselineRaw = fs.readFileSync(baselinePath(root), "utf8");
+      const baseline = readBaseline(baselineRaw, task.id);
+      const configRaw = fs.readFileSync(checksPath(root), "utf8");
+      const gates = listGates(fs, root);
+      if (fs.readFileSync(checksPath(root), "utf8") !== configRaw) {
+        return refusal(task.id, "VERIFICATION_POLICY_CHANGED", "Verification configuration changed while preparing completion.");
+      }
+      for (const original of baseline.gates) {
+        const current = gates.find((gate) => gate.name === original.name);
+        if (!current || current.command !== original.command || current.timeoutSeconds < original.timeoutSeconds) {
+          return refusal(task.id, "VERIFICATION_POLICY_CHANGED", `Claim-time gate '${original.name}' was removed or weakened.`);
+        }
+      }
+      if (!gates.length) return refusal(task.id, "VERIFICATION_UNCONFIGURED", "No verification gates registered. Use 'agentctl verify add'.");
+      return { task, baselineRaw, configRaw, gates, taskRaw: fs.readFileSync(task.file, "utf8") };
+    } catch (error) {
+      return refusal(task.id, "VERIFICATION_CONFIG_ERROR", errorMessage(error));
+    }
+  });
+  if ("ok" in attempt) return attempt;
+
+  let verification: VerifyResult;
+  try {
+    verification = runGates(root, attempt.gates, runner);
+  } catch (error) {
+    return refusal(attempt.task.id, "VERIFICATION_EXECUTION_ERROR", errorMessage(error));
+  }
+  if (!verification.passed) {
+    return refusal(attempt.task.id, "VERIFICATION_FAILED", "One or more verification gates failed.", verification);
+  }
+  return withRecordLock(fs, root, () => {
+    try {
+      const current = activeTask(fs, root, attempt.task.id);
+      if (current.file !== attempt.task.file ||
+          fs.readFileSync(current.file, "utf8") !== attempt.taskRaw ||
+          fs.readFileSync(baselinePath(root), "utf8") !== attempt.baselineRaw ||
+          fs.readFileSync(checksPath(root), "utf8") !== attempt.configRaw) {
+        return refusal(attempt.task.id, "COMPLETION_STATE_CHANGED",
+          "Task, claim or verification configuration changed during verification. Retry completion.", verification);
+      }
+      changeStatus(fs, current, "implemented");
+      return { ok: true, id: current.id, status: "implemented", verification };
+    } catch (error) {
+      return { ok: false, id: attempt.task.id, code: "COMPLETION_STATE_CHANGED",
+        message: errorMessage(error), verification };
+    }
   });
 }

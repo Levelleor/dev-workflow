@@ -133,12 +133,12 @@ For a new package, an npm scope maintainer can publish the first version interac
 agentctl task claim next                 # select by priority and return claimed task metadata
 agentctl task claim STORY-0001 --json    # explicitly claim a task by stable ID; JSON contains task ID/status
 agentctl task getcontext STORY-0001      # assemble full context for the claimed task
-agentctl task complete STORY-0001        # mark that task implemented, not accepted
+agentctl task complete STORY-0001        # run all gates, then mark implemented if they pass
 ```
 
 Task IDs are canonical identifiers such as `STORY-0001`, not file names. All task commands use the same positional ID format; `getcontext` and `complete` may omit the ID when exactly one task is active. `claim next` selects by priority, while `claim STORY-0001` deliberately chooses that specific task and still enforces dependencies, status and single-task ownership.
 
-New stories start `pending`. Optional frontmatter includes `priority: 1` (highest) to `5` (lowest), `depends_on: [STORY-0001]`, and `blocked: true`. Claimed tasks become `in-progress`; `complete` changes the status to `implemented`. Proposed stories are not claimable. Dependencies count as resolved when implemented/completed/accepted.
+New stories start `pending`. Optional frontmatter includes `priority: 1` (highest) to `5` (lowest), `depends_on: [STORY-0001]`, and `blocked: true`. Claimed tasks become `in-progress`; `complete` runs all registered gates and changes the status to `implemented` only on success. Proposed stories are not claimable. Dependencies count as resolved when implemented/completed/accepted.
 
 `.agentctl/project.yaml` defines `context.include` for common project documents and `context.reference` for optional paths. The complete prompt embeds the story, parent PRD, relevant accepted decisions and active task plan where present. Missing essential context makes `getcontext` fail, but the claim remains in-progress; correct the missing document and retry with the same ID. `agentctl config show --json` returns the configured models, optional thinking levels and retry budgets together; task context and gate reads remain separate.
 
@@ -154,6 +154,8 @@ Each gate is a named command in `.agentctl/checks.yaml`, independent of the proj
 Register a gate with `agentctl verify add <name> [--timeout SECONDS] -- <command> [args...]`. The `--` delimiter preserves command options. Existing gates cannot be overwritten by this command. Changes are Git-tracked and should be reviewed because registered shell commands run with the invoking user's privileges. There is no gate removal or modification command in this milestone.
 
 Use `--json` for machine-readable receipts containing exit codes, elapsed time, bounded stdout/stderr and timeout state. CLI exit code is 1 when any selected gate fails or configuration is invalid. No gates is an error for `verify`, not a pass.
+
+`task complete` runs every registered gate afresh and returns exit 1 with diagnostics (including `verification` receipts in JSON when gates ran) on failure. Claiming records the original gate definitions in the ignored `.agentctl/runtime/task-claim.json`. New gates may be added; removal, command changes or shorter timeouts of original gates prevent completion. A missing or invalid claim snapshot blocks completion; for tasks already in progress before upgrading, the coordinator must review the trusted policy, return the story to pending and claim it again. Changes to the task, claim or checks configuration during successful execution invalidate the attempt. This is local coordination, not a security boundary against arbitrary filesystem or source edits. No cached receipts or override flags are accepted.
 
 ## Task notes
 

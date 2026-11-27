@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fixture } from "./fixtures.js";
+import { addGate, type RunCommand } from "../src/verify.js";
+
+const green: RunCommand = () => ({ exitCode: 0, stdout: "", stderr: "", durationMs: 1 });
 import { addRecord, findRecord } from "../src/records.js";
 import { claimNextTask, claimTask, completeTask, getActiveTaskContext, selectNextTask, selectTaskById } from "../src/task.js";
 
@@ -38,7 +41,7 @@ describe("deterministic task claiming", () => {
     expect(fs.existsSync(`${higher.file}.agentctl.tmp`)).toBe(false);
     expect(selectNextTask(fs, "/repo")).toMatchObject({ ok: false, code: "TASK_IN_PROGRESS" });
     expect(getActiveTaskContext(fs, "/repo").task.id).toBe(higher.id);
-    const completed = completeTask(fs, "/repo");
+    const completed = completeTask(fs, "/repo", undefined, green);
     expect(completed.status).toBe("implemented");
     expect(findRecord(fs, "/repo", higher.id).status).toBe("implemented");
     expect(() => completeTask(fs, "/repo")).toThrow(/No task is in progress/);
@@ -175,7 +178,7 @@ describe("explicit task ID claiming", () => {
     expect(findRecord(fs, "/repo", second.id).status).toBe("in-progress");
     expect(findRecord(fs, "/repo", first.id).status).toBe("pending");
     expect(getActiveTaskContext(fs, "/repo", second.id).task.id).toBe(second.id);
-    expect(completeTask(fs, "/repo", second.id).status).toBe("implemented");
+    expect(completeTask(fs, "/repo", second.id, green).status).toBe("implemented");
     expect(claimNextTask(fs, "/repo")).toMatchObject({ ok: true, task: { id: first.id } });
   });
 
@@ -220,5 +223,83 @@ describe("explicit task ID claiming", () => {
     expect(() => getActiveTaskContext(fs, "/repo", story.id)).toThrow(/Required context document is missing/);
     expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
     expect(fs.existsSync("/repo/.agentctl/runtime/task.lock")).toBe(false);
+  });
+});
+
+describe("verified task completion", () => {
+  function active() {
+    const { fs, prd } = setup();
+    const story = addRecord(fs, "/repo", { type: "story", title: "Verify first", parent: prd.id });
+    expect(claimTask(fs, "/repo", story.id).ok).toBe(true);
+    return { fs, story };
+  }
+
+  it("runs every original and newly registered gate, never unblocks on failure, and retries freshly", () => {
+    const { fs, story } = active();
+    addGate(fs, "/repo", "browser", "browser test", 10);
+    const calls: string[] = [];
+    const runner: RunCommand = (command) => {
+      calls.push(command);
+      expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
+      return { ...green(command, "/repo", 0), exitCode: command === "browser test" ? 1 : 0 };
+    };
+    const result = completeTask(fs, "/repo", story.id, runner);
+    expect(result).toMatchObject({ ok: false, code: "VERIFICATION_FAILED", status: "in-progress",
+      verification: { passed: false, checks: [{ name: "browser", passed: false }, { name: "scaffold", passed: true }] } });
+    expect(calls).toEqual(["browser test", "npm test"]);
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
+    expect(completeTask(fs, "/repo", story.id, green)).toMatchObject({ ok: true, status: "implemented" });
+  });
+
+  it.each([
+    ["command changed", "checks:\n  scaffold:\n    command: echo bypass\n    timeoutSeconds: 5\n"],
+    ["timeout reduced", "checks:\n  scaffold:\n    command: npm test\n    timeoutSeconds: 1\n"],
+    ["gate removed", "checks: {}\n"],
+  ])("rejects claim-time policy weakening: %s", (_, config) => {
+    const { fs, story } = active();
+    fs.writeFileSync("/repo/.agentctl/checks.yaml", config);
+    expect(completeTask(fs, "/repo", story.id, () => { throw new Error("must not run"); }))
+      .toMatchObject({ ok: false, code: "VERIFICATION_POLICY_CHANGED" });
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
+  });
+
+  it("blocks a timeout, even with an exit code of zero", () => {
+    const { fs, story } = active();
+    expect(completeTask(fs, "/repo", story.id, () => ({ ...green("", "", 0), timedOut: true })))
+      .toMatchObject({ ok: false, code: "VERIFICATION_FAILED" });
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
+  });
+
+  it("blocks missing claim evidence and supports empty initial configurations only after gates are added", () => {
+    const { fs, prd } = setup();
+    fs.writeFileSync("/repo/.agentctl/checks.yaml", "checks: {}\n");
+    const story = addRecord(fs, "/repo", { type: "story", title: "Bootstrap", parent: prd.id });
+    expect(claimTask(fs, "/repo", story.id).ok).toBe(true);
+    expect(completeTask(fs, "/repo", story.id, green)).toMatchObject({ ok: false, code: "VERIFICATION_UNCONFIGURED" });
+    addGate(fs, "/repo", "unit", "npm test");
+    fs.unlinkSync("/repo/.agentctl/runtime/task-claim.json");
+    expect(completeTask(fs, "/repo", story.id, green)).toMatchObject({ ok: false, code: "MISSING_BASELINE" });
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
+  });
+
+  it("allows a new gate to be registered during verification, but rejects the stale attempt", () => {
+    const { fs, story } = active();
+    const result = completeTask(fs, "/repo", story.id, () => {
+      addGate(fs, "/repo", "extra", "extra test");
+      return green("", "", 0);
+    });
+    expect(result).toMatchObject({ ok: false, code: "COMPLETION_STATE_CHANGED" });
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
+    expect(completeTask(fs, "/repo", story.id, green)).toMatchObject({ ok: true });
+  });
+
+  it("rejects a task record changed during verification", () => {
+    const { fs, story } = active();
+    const result = completeTask(fs, "/repo", story.id, () => {
+      fs.writeFileSync(story.file, fs.readFileSync(story.file, "utf8") + "\nChanged during verification.\n");
+      return green("", "", 0);
+    });
+    expect(result).toMatchObject({ ok: false, code: "COMPLETION_STATE_CHANGED" });
+    expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
   });
 });

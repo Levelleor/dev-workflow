@@ -46,6 +46,12 @@ jobs:
           (cd "$tmp" && node "$cli" task getcontext STORY-0002 > "$tmp/resumed-prompt.md")
           grep -q "Explicitly selected" "$tmp/resumed-prompt.md"
           grep -q "Smoke product" "$tmp/resumed-prompt.md"
+          if (cd "$tmp" && node "$cli" task complete STORY-0002 --json > "$tmp/unconfigured.json"); then
+            echo "Completion unexpectedly passed without gates"
+            exit 1
+          fi
+          grep -q "status: in-progress" "$tmp/docs/work/items/STORY-0002-explicitly-selected.md"
+          (cd "$tmp" && node "$cli" verify add green -- node -e 'process.exit(0)')
           (cd "$tmp" && node "$cli" task complete STORY-0002)
           grep -q "status: implemented" "$tmp/docs/work/items/STORY-0002-explicitly-selected.md"
           (cd "$tmp" && node "$cli" task claim next > "$tmp/next-claim.txt")
@@ -59,7 +65,6 @@ jobs:
           (cd "$tmp" && node "$cli" task STORY-0001 notes remove N001)
           (cd "$tmp" && node "$cli" task STORY-0001 notes list --json > "$tmp/notes-after.json")
           node -e 'const d=require(process.argv[1]); if (d.notes.length) process.exit(1)' "$tmp/notes-after.json"
-          (cd "$tmp" && node "$cli" verify add green -- node -e 'process.exit(0)')
           (cd "$tmp" && node "$cli" verify list --json > "$tmp/gates.json")
           grep -q '"name": "green"' "$tmp/gates.json"
           (cd "$tmp" && node "$cli" verify --json > "$tmp/all-gates.json")
