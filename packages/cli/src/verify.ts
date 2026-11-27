@@ -40,6 +40,14 @@ export const runCommand: RunCommand = (command, cwd, timeoutMs) => {
 
 function namedGates(fs: FileSystem, root: string): Map<string, Gate> {
   const config = readYaml(fs, join(root, ".agentctl", "checks.yaml"));
+  const policy = config.policy;
+  if (policy !== undefined && (!policy || typeof policy !== "object" || Array.isArray(policy))) {
+    throw new Error("Verification policy must be a YAML mapping.");
+  }
+  if (policy && Object.hasOwn(policy, "unconfiguredProfile") &&
+      (policy as Record<string, unknown>).unconfiguredProfile !== "block") {
+    throw new Error("policy.unconfiguredProfile must be 'block'.");
+  }
   const values = config.checks;
   if (!values || typeof values !== "object" || Array.isArray(values)) {
     throw new Error("Verification checks must be a YAML mapping.");

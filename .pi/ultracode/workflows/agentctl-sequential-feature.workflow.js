@@ -220,7 +220,6 @@ while (reviewRounds < maxReviewRounds) {
 
   phase("Publish");
 
-
   // PR creation requires repository credentials and must not be an arbitrary host shell command.
   // Use a dedicated publisher agent, with no permission to change code or verification policy.
   const published = await agent(

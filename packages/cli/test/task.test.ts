@@ -236,6 +236,7 @@ describe("verified task completion", () => {
 
   it("runs every original and newly registered gate, never unblocks on failure, and retries freshly", () => {
     const { fs, story } = active();
+    const dependent = addRecord(fs, "/repo", { type: "story", title: "Dependent", parent: String(story.metadata.parent), dependsOn: [story.id] });
     addGate(fs, "/repo", "browser", "browser test", 10);
     const calls: string[] = [];
     const runner: RunCommand = (command) => {
@@ -247,8 +248,10 @@ describe("verified task completion", () => {
     expect(result).toMatchObject({ ok: false, code: "VERIFICATION_FAILED", status: "in-progress",
       verification: { passed: false, checks: [{ name: "browser", passed: false }, { name: "scaffold", passed: true }] } });
     expect(calls).toEqual(["browser test", "npm test"]);
+    expect(selectTaskById(fs, "/repo", dependent.id)).toMatchObject({ ok: false });
     expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
     expect(completeTask(fs, "/repo", story.id, green)).toMatchObject({ ok: true, status: "implemented" });
+    expect(selectTaskById(fs, "/repo", dependent.id)).toMatchObject({ ok: true });
   });
 
   it.each([
@@ -302,4 +305,18 @@ describe("verified task completion", () => {
     expect(result).toMatchObject({ ok: false, code: "COMPLETION_STATE_CHANGED" });
     expect(findRecord(fs, "/repo", story.id).status).toBe("in-progress");
   });
+});
+
+it("blocks malformed configuration and execution errors", () => {
+  const { fs, prd } = setup();
+  const task = addRecord(fs, "/repo", { type: "story", title: "Malformed policy", parent: prd.id });
+  expect(claimTask(fs, "/repo", task.id).ok).toBe(true);
+  const file = "/repo/.agentctl/checks.yaml";
+  const original = fs.readFileSync(file, "utf8");
+  fs.writeFileSync(file, "checks: [broken]\n");
+  expect(completeTask(fs, "/repo", task.id, green)).toMatchObject({ ok: false, code: "VERIFICATION_CONFIG_ERROR" });
+  fs.writeFileSync(file, original);
+  expect(completeTask(fs, "/repo", task.id, () => { throw new Error("cannot spawn"); }))
+    .toMatchObject({ ok: false, code: "VERIFICATION_EXECUTION_ERROR" });
+  expect(findRecord(fs, "/repo", task.id).status).toBe("in-progress");
 });

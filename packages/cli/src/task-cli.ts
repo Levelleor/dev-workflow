@@ -112,6 +112,8 @@ export const taskCommand: CommandDefinition = {
       run({ args, flags, fs, root, runner, json, emit, output, usage }) {
         requirePositionalId(flags);
         if (args.length > 1) throw new Error(`Usage: ${usage}`);
+        const unknownFlag = Object.keys(flags).find((name) => name !== "json");
+        if (unknownFlag) throw new Error(`Unknown option: --${unknownFlag}. Completion always runs all registered gates.`);
         const result = completeTask(fs, root, args[0], runner);
         if (json) emit(result);
         else {

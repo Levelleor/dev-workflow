@@ -95,6 +95,7 @@ it("returns a structured completion failure and leaves the story in progress", (
   const run = (argv: string[]) => runCli(argv, { fs, cwd: "/repo", output: (value) => output.push(value),
     runner: () => ({ exitCode: 1, stdout: "", stderr: "test failed", durationMs: 5 }) });
   expect(run(["task", "claim", task.id])).toBe(0);
+  expect(run(["task", "complete", task.id, "--skip-verification"])).toBe(1);
   expect(run(["task", "complete", task.id, "--json"])).toBe(1);
   expect(JSON.parse(output.at(-1)!)).toMatchObject({ ok: false, id: task.id, status: "in-progress",
     code: "VERIFICATION_FAILED", verification: { passed: false, checks: [{ stderr: "test failed" }] } });

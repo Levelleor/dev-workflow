@@ -213,9 +213,8 @@ export type CompletionResult =
   | { ok: true; id: string; status: "implemented"; verification: VerifyResult }
   | { ok: false; id: string; status?: "in-progress"; code: string; message: string; verification?: VerifyResult };
 
-function refusal(id: string, code: string, message: string, verification?: VerifyResult,
-  status: "in-progress" | undefined = "in-progress"): CompletionResult {
-  return { ok: false, id, status, code, message, ...(verification ? { verification } : {}) };
+function refusal(id: string, code: string, message: string, verification?: VerifyResult): Extract<CompletionResult, { ok: false }> {
+  return { ok: false, id, status: "in-progress", code, message, ...(verification ? { verification } : {}) };
 }
 
 function errorMessage(error: unknown): string {
@@ -224,7 +223,9 @@ function errorMessage(error: unknown): string {
 
 export function completeTask(fs: FileSystem, root: string, id?: string, runner?: RunCommand): CompletionResult {
   // Do not hold the record lock while executing arbitrary project commands.
-  const attempt = withRecordLock(fs, root, () => {
+  const attempt = withRecordLock<Extract<CompletionResult, { ok: false }> | {
+    task: RecordEntry; baselineRaw: string; configRaw: string; gates: Gate[]; taskRaw: string;
+  }>(fs, root, () => {
     const task = activeTask(fs, root, id);
     try {
       if (!fs.existsSync(baselinePath(root))) {
@@ -261,7 +262,7 @@ export function completeTask(fs: FileSystem, root: string, id?: string, runner?:
   if (!verification.passed) {
     return refusal(attempt.task.id, "VERIFICATION_FAILED", "One or more verification gates failed.", verification);
   }
-  return withRecordLock(fs, root, () => {
+  return withRecordLock<CompletionResult>(fs, root, () => {
     try {
       const current = activeTask(fs, root, attempt.task.id);
       if (current.file !== attempt.task.file ||
