@@ -1,7 +1,7 @@
 ---
 id: ADR-0002
 type: adr
-status: accepted
+status: superseded
 related:
   - PRD-0001
   - FLOW-001
@@ -9,6 +9,8 @@ supersedes: []
 ---
 
 # ADR-0002: Ultracode orchestration for the first POC
+
+Superseded for future development by [ADR-0004](ADR-0004-pi-sdk-extension.md) on 2026-11-26. The original implementation is preserved on [ultracode-legacy](https://github.com/Levelleor/dev-workflow/tree/ultracode-legacy). Historical decision text follows.
 
 ## Context
 

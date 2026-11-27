@@ -1,4 +1,12 @@
-# Ultracode orchestration architecture
+# Orchestration architecture
+
+## Accepted successor direction
+
+[ADR-0004](../decisions/ADR-0004-pi-sdk-extension.md) selects a dedicated Pi extension using SDK sessions. The main Pi session remains available for conversational planning and workflow control while managed agents run. The deterministic controller owns sequencing, mandatory checks, guided repair, independent review and human intervention. See [ADR-0006](../decisions/ADR-0006-feature-quality-and-human-gates.md). Workflow format, persistence and approval surface are not decided. The successor is not yet implemented.
+
+## Legacy Ultracode implementation
+
+The following describes the preserved implementation on [ultracode-legacy](https://github.com/Levelleor/dev-workflow/tree/ultracode-legacy), not the selected future runtime.
 
 The first autonomous workflow is an **interactive Pi → saved Ultracode workflow** path. The workflow consumes model selection, optional thinking effort, bounded `repairRetries` and `reviewRetries` from `.agentctl/models.yaml`, and owns independent review and PR publication. When model or thinking is omitted, Ultracode inherits the model or effort from its role/Pi. `agentctl` owns only deterministic task state, context assembly, notes and gate execution.
 

@@ -19,7 +19,7 @@ This repository builds `agentctl` and uses it for its own planning. Pi loads thi
 - Do not silently rewrite requirements, accepted decisions or trusted check policy.
 - Maintain stable record IDs and links; record design uncertainty explicitly.
 - Never commit secrets, transcripts or `.agentctl/runtime/`.
-- POC: one in-progress task per working tree, serial integration. Ultracode execution is planned, not active.
+- Current sequential baseline: one in-progress task per working tree, serial integration. Ultracode is the legacy implementation. For new architecture work follow accepted ADR-0004 through ADR-0006 (Pi SDK extension, modular agentctl backends, mandatory human validation). The successor is not yet implemented.
 
 ## Reference map (not automatically followed)
 
@@ -27,6 +27,7 @@ This repository builds `agentctl` and uses it for its own planning. Pi loads thi
 - [Architecture](docs/architecture/overview.md)
 - [Knowledge conventions](docs/knowledge/README.md)
 - [Decision index](docs/decisions/README.md)
+- [Pi-native harness brainstorming](docs/knowledge/brainstorming/BRAINSTORM-0001-pi-native-development-harness.md)
 - [Work index](docs/work/README.md)
 - [Workflow design](workflows/feature.md)
 
