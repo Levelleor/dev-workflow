@@ -6,7 +6,7 @@ The first functional component is **agentctl**, a TypeScript CLI for repository 
 
 ## Monorepo
 
-- [`packages/cli/`](packages/cli/README.md): npm package `@levelleor/agentctl` (binary: `agentctl`; private until publication).
+- [`packages/cli/`](packages/cli/README.md): npm package `@levelleor/agentctl` (binary: `agentctl`). See [Publishing](packages/cli/README.md#publishing) for the release process.
 - [`packages/core/`](packages/core/README.md): planned shared contracts and policy.
 - [`packages/knowledge/`](packages/knowledge/README.md): planned storage adapter.
 - [`packages/verification/`](packages/verification/README.md): planned trusted verifier.

@@ -40,8 +40,12 @@ test('root workspace remains private and includes packages', () => {
   assert.ok(manifest.workspaces.includes('packages/*'));
 });
 
-test('all initial packages are private until publishing is implemented', () => {
-  for (const pkg of ['cli', 'core', 'knowledge', 'verification', 'pi-ultracode-agentctl-bridge']) {
+test('the CLI can publish publicly and the other workspaces are private', () => {
+  const cli = JSON.parse(readFileSync('packages/cli/package.json', 'utf8'));
+  assert.notEqual(cli.private, true);
+  assert.equal(cli.publishConfig.access, 'public');
+  assert.equal(cli.license, 'Apache-2.0');
+  for (const pkg of ['core', 'knowledge', 'verification', 'pi-ultracode-agentctl-bridge']) {
     const manifest = JSON.parse(readFileSync(`packages/${pkg}/package.json`, 'utf8'));
     assert.equal(manifest.private, true, `${pkg} is unexpectedly publishable`);
   }

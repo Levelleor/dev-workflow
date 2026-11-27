@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli.js";
 import { fixture } from "./fixtures.js";
@@ -13,7 +14,8 @@ describe("CLI interface", () => {
     expect(output[0]).toContain("agentctl init");
     expect(output).toEqual(Array(4).fill(output[0]));
     expect(runCli(["--version"], options)).toBe(0);
-    expect(output.at(-1)).toContain("0.1.0");
+    const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    expect(output.at(-1)).toBe(`agentctl ${manifest.version}`);
   });
 
   it("initialises an absolute target directory", () => {

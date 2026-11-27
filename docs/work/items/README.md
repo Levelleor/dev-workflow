@@ -11,3 +11,5 @@ Add new items with a unique ID and parent/source reference, then link them here.
 - [STORY-0006: Normalize agentctl help flags in the argument parser](STORY-0006-normalize-agentctl-help-flags-in-the-argument-parser.md)
 
 - [STORY-0007: Give each agentctl command its own usage and help](STORY-0007-give-each-agentctl-command-its-own-usage-and-help.md)
+
+- [STORY-0008: Publish agentctl from versioned Git tags](STORY-0008-publish-agentctl-from-versioned-git-tags.md)

@@ -1,9 +1,14 @@
 {
   "name": "@levelleor/agentctl",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Repository-backed coding-agent harness CLI",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Levelleor/dev-workflow.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "agentctl": "./dist/index.js"
   },
