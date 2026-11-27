@@ -103,3 +103,12 @@ describe("restricted pi-ultracode-agentctl-bridge", () => {
     }
   });
 });
+
+it("returns a rejected verified completion and gives it the verification execution budget", async () => {
+  const result = { ok: false, code: "VERIFICATION_FAILED", status: "in-progress" };
+  const executor = vi.fn<Executor>(async () => ({ exitCode: 1, stdout: JSON.stringify(result), stderr: "" }));
+  const capability = createAgentctlCapabilities(executor)[1];
+  expect(await capability.execute({ op: "complete", id: "STORY-0001" }, CONTEXT))
+    .toEqual({ exitCode: 1, value: result });
+  expect(executor).toHaveBeenCalledWith(["task", "complete", "STORY-0001", "--json"], CWD, CONTEXT.signal, 600000);
+});

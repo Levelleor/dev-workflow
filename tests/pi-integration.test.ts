@@ -362,3 +362,20 @@ test("rejects thresholds outside the configured repair budget", async () => {
     });
   }
 });
+
+test("a gate failure after independent review prevents completion and publication", async () => {
+  await project(async (cwd) => {
+    fs.writeFileSync(path.join(cwd, ".agentctl/checks.yaml"), [
+      "checks:", "  once:", "    timeoutSeconds: 10",
+      "    command: " + JSON.stringify("node -e \"const fs=require('fs'); if(fs.existsSync('checked.flag')) process.exit(1); fs.writeFileSync('checked.flag','yes')\""),
+      "",
+    ].join("\n"));
+    modelConfig(cwd, "reviewRetries: 2", "reviewRetries: 0");
+    const { result, calls } = await execute(cwd);
+    assert.equal(result.status, "escalated");
+    assert.match(result.reason, /VERIFICATION_FAILED/);
+    assert.equal(calls.filter((c) => c.label === "independent review").length, 1);
+    assert.equal(calls.filter((c) => c.label === "publish accepted PR").length, 0);
+    assert.match(fs.readFileSync(path.join(cwd, "docs/work/items/STORY-0001-implement-e2e.md"), "utf8"), /status: in-progress/);
+  });
+});

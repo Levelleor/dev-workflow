@@ -62,7 +62,7 @@ export const taskCommand: CommandDefinition = {
   summary: "Claim work, get task context, mark implementation complete, or manage notes.",
   details: [
     "Use positional task IDs in STORY-0001 format.",
-    "Task lifecycle: pending or ready → in-progress → implemented. Verification and acceptance are separate.",
+    "Task lifecycle: pending or ready → in-progress → implemented (all gates pass). Independent review and acceptance are separate.",
     "Only one task can be in progress per working tree.",
   ].join("\n"),
   children: [
@@ -106,15 +106,27 @@ export const taskCommand: CommandDefinition = {
     },
     {
       name: "complete",
-      summary: "Mark an in-progress task implemented.",
+      summary: "Run all verification gates and mark an in-progress task implemented only if they pass.",
       syntax: "[ID] [--json]",
-      details: "Omit ID to use the active task. Verification and acceptance are separate.",
-      run({ args, flags, fs, root, json, emit, usage }) {
+      details: "Omit ID to use the active task. All registered gates must pass; failures leave the task in progress and exit 1. Independent review and acceptance are separate.",
+      run({ args, flags, fs, root, runner, json, emit, output, usage }) {
         requirePositionalId(flags);
         if (args.length > 1) throw new Error(`Usage: ${usage}`);
-        const completed = completeTask(fs, root, args[0]);
-        emit(json ? { id: completed.id, status: completed.status } : `${completed.id} marked implemented. Verification and acceptance are separate.`);
-        return 0;
+        const unknownFlag = Object.keys(flags).find((name) => name !== "json");
+        if (unknownFlag) throw new Error(`Unknown option: --${unknownFlag}. Completion always runs all registered gates.`);
+        const result = completeTask(fs, root, args[0], runner);
+        if (json) emit(result);
+        else {
+          for (const check of result.verification?.checks ?? []) {
+            output(`[${check.passed ? "PASS" : "FAIL"}] ${check.name} (${check.durationMs}ms)`);
+            if (check.stdout) output(check.stdout);
+            if (check.stderr) output(check.stderr);
+          }
+          emit(result.ok
+            ? `${result.id} marked implemented. All verification gates passed; independent review and acceptance are separate.`
+            : `Completion rejected for ${result.id}: ${result.message}`);
+        }
+        return result.ok ? 0 : 1;
       },
     },
   ],

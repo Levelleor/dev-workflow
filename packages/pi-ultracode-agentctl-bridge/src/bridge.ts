@@ -152,7 +152,8 @@ export function createAgentctlCapabilities(executor: Executor = execAgentctl): C
         const argv = allowedArguments(kind, input);
         // This cwd is supplied by Ultracode for a trusted project, never by the workflow.
         const cwd = realpathSync(context.cwd);
-        const result = await executor(argv, cwd, context.signal, timeoutMs);
+        const completion = kind === "write" && argv[1] === "complete";
+        const result = await executor(argv, cwd, context.signal, kind === "write" && !completion ? 30_000 : timeoutMs);
         if (!Number.isInteger(result.exitCode) || Math.abs(result.exitCode) > 255) {
           throw new Error("Invalid agentctl process exit status.");
         }
@@ -165,6 +166,7 @@ export function createAgentctlCapabilities(executor: Executor = execAgentctl): C
         // A failed verification gate is valid data. Other unexpected failures stop the workflow.
         if (result.exitCode !== 0 &&
             !(kind === "verify" && result.exitCode === 1) &&
+            !(completion && result.exitCode === 1 && object(value).ok === false) &&
             !(kind === "write" && argv[1] === "claim" && result.exitCode === 2)) {
           throw new Error("agentctl command failed: " + result.stderr.slice(-1000));
         }
@@ -174,7 +176,7 @@ export function createAgentctlCapabilities(executor: Executor = execAgentctl): C
   }
   return [
     capability("agentctl.read", "read", READ_SCHEMA, 30_000, "read"),
-    capability("agentctl.write", "write", WRITE_SCHEMA, 30_000, "write"),
+    capability("agentctl.write", "write", WRITE_SCHEMA, 600_000, "write"),
     // Verification executes project-defined commands and therefore counts as a write effect.
     capability("agentctl.verify", "write", VERIFY_SCHEMA, 600_000, "verify"),
   ];

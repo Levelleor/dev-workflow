@@ -194,7 +194,7 @@ while (reviewRounds < maxReviewRounds) {
     continue;
   }
 
-  // Verify one last time after review, before changing task state.
+  // Check baseline integrity before verified completion.
   const finalGatesResult = await hostCall("agentctl.read", { op: "gates" });
   let changed = false;
   for (const baseline of originalGates) {
@@ -205,19 +205,20 @@ while (reviewRounds < maxReviewRounds) {
   if (changed) {
     return { status: "escalated", id, reason: "Verification gate changed during review", reviewRounds };
   }
-  const finalCheck = await hostCall("agentctl.verify", {});
-  if (!finalCheck.value.passed || finalCheck.exitCode !== 0) {
-    feedback = "Final verification failed after reviewer approval: " + JSON.stringify(finalCheck.value);
-    if (reviewRounds === maxReviewRounds) {
+  // Record the independent review before completion so the task record is stable during the gates.
+  await hostCall("agentctl.write", { op: "note-add", id,
+    text: ("Independent review approved in round " + reviewRounds + ": " + verdict.summary).slice(0, 3900) });
+  const completion = await hostCall("agentctl.write", { op: "complete", id });
+  if (completion.exitCode !== 0 || !completion.value.ok) {
+    feedback = "Verified completion rejected after reviewer approval: " + JSON.stringify(completion.value);
+    if (completion.value.code !== "VERIFICATION_FAILED" || reviewRounds === maxReviewRounds) {
       return { status: "escalated", id, reason: feedback, reviewRounds };
     }
     continue;
   }
+  const finalCheck = completion.value.verification;
 
   phase("Publish");
-  await hostCall("agentctl.write", { op: "note-add", id,
-    text: ("Review accepted in round " + reviewRounds + ": " + verdict.summary).slice(0, 3900) });
-  await hostCall("agentctl.write", { op: "complete", id });
 
   // PR creation requires repository credentials and must not be an arbitrary host shell command.
   // Use a dedicated publisher agent, with no permission to change code or verification policy.
@@ -228,7 +229,7 @@ while (reviewRounds < maxReviewRounds) {
     "Use the repository's existing git/gh capabilities and return the exact PR URL. " +
     "If publishing is unavailable, report the blocker without changing anything. " +
     "Reviewer approval:\n" + verdict.summary +
-    "\nVerification:\n" + JSON.stringify(finalCheck.value),
+    "\nVerification:\n" + JSON.stringify(finalCheck),
     { label: "publish accepted PR", phase: "Publish", model: reviewerModel,
       agentType: "agentctl-publisher", schema: RESULT },
   );

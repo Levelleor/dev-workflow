@@ -145,8 +145,8 @@ export function buildTaskContext(fs: FileSystem, root: string, task: RecordEntry
     ...[...optional].sort().map((path) => `- ${path}`),
     "",
     "## Handoff",
-    "Implement and test the change. Run the configured checks, report limitations, then use 'agentctl task complete' to mark implementation finished.",
-    "'implemented' does not mean independently verified or accepted.",
+    "Implement and test the change, report limitations, then use 'agentctl task complete'. It runs all registered gates and marks implementation finished only if they pass.",
+    "'implemented' means deterministic gates passed at completion, not independently reviewed or accepted.",
   ].join("\n\n");
   return {
     task: { id: task.id, title: task.title, status: task.status, path: fileOf(task) },
